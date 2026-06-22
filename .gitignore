@@ -55,24 +55,7 @@ build/
 *.bak
 backup/
 backups/
-TEST_RESULTS.md
-LDAP_FEATURE.md
 
 # Documentation and Tests
-tests/
-#docs/
 amnezia-web-panel.code-workspace
-restore_local.php
-test_protocols.php
-scripts/regen_qr.php
-scripts/test_xray_install.sh
-scripts/test_online.php
-API_AWG_DOCS.md
 log.txt
-scripts/bootstrap_awg_container.sh
-scripts/fix_server_visibility.sh
-scripts/remote_fix_client_create.sh
-scripts/retest_client_api.sh
-scripts/awg2_retest_final.sh
-migrations/065_aivpn_prebuilt.sql
-migrations/069_fix_aivpn_prebuilt_binary.sql
