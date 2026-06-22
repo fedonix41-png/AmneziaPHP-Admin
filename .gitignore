@@ -60,7 +60,7 @@ LDAP_FEATURE.md
 
 # Documentation and Tests
 tests/
-docs/
+#docs/
 amnezia-web-panel.code-workspace
 restore_local.php
 test_protocols.php
