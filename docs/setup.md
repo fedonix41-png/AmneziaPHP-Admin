@@ -82,7 +82,9 @@ docker compose up -d
 
 Access: `http://localhost:8082`
 
-**Live code editing**: Mount project as volume (already configured in docker-compose.yml)
+**Live code editing**: Mount project as volume (already configured in docker-compose.yml).
+> [!NOTE]
+> On Linux distributions with SELinux enabled (e.g., Fedora, CentOS, RHEL), the volume mounts in `docker-compose.yml` use the `:z` / `:ro,z` flag to automatically label the files and directories on the host with container-compatible security contexts. This prevents "403 Forbidden" errors where the containerized Apache server cannot read `.htaccess` or other source files.
 
 ## Deployment
 
