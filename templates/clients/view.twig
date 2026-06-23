@@ -44,18 +44,20 @@
         <a href="/clients/{{ client.id }}/download" class="gradient-bg text-white px-4 py-2 rounded">
           <i class="fas fa-download"></i> Download Config
         </a>
-        {% if client.status == 'active' %}
-          <form method="POST" action="/clients/{{ client.id }}/revoke" style="display:inline;">
-            <button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded" onclick="return confirm('Revoke access for this client?')">
-              <i class="fas fa-ban"></i> Revoke
-            </button>
-          </form>
-        {% else %}
-          <form method="POST" action="/clients/{{ client.id }}/restore" style="display:inline;">
-            <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
-              <i class="fas fa-check"></i> Restore
-            </button>
-          </form>
+        {% if user.role == 'admin' %}
+          {% if client.status == 'active' %}
+            <form method="POST" action="/clients/{{ client.id }}/revoke" style="display:inline;">
+              <button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded" onclick="return confirm('Revoke access for this client?')">
+                <i class="fas fa-ban"></i> Revoke
+              </button>
+            </form>
+          {% else %}
+            <form method="POST" action="/clients/{{ client.id }}/restore" style="display:inline;">
+              <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+                <i class="fas fa-check"></i> Restore
+              </button>
+            </form>
+          {% endif %}
         {% endif %}
       </div>
     </div>
@@ -87,6 +89,7 @@
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
     <div class="bg-white rounded shadow p-6">
       <h3 class="font-bold mb-4">{{ t('clients.expiration') }}</h3>
+      {% if user.role == 'admin' %}
       <form onsubmit="updateExpiration(event, {{ client.id }})" class="space-y-3">
         <div>
           <label class="block text-sm text-gray-600 mb-1">{{ t('clients.expiration') }}</label>
@@ -120,10 +123,26 @@
           <i class="fas fa-save"></i> {{ t('form.update') }}
         </button>
       </form>
+      {% else %}
+      <div class="p-3 bg-blue-50 border border-blue-200 rounded">
+        <div class="text-xs text-blue-600 font-semibold mb-1">CURRENT VALUE:</div>
+        <div class="text-sm text-blue-900 font-medium">
+          {% if client.expires_at %}
+            {% set expires_ts = client.expires_at|date('U') %}
+            {% set now_ts = "now"|date('U') %}
+            {% set diff_days = ((expires_ts - now_ts) / 86400)|round %}
+            {{ client.expires_at|date('Y-m-d H:i:s') }} ({{ diff_days }} {{ t('common.days') }})
+          {% else %}
+            {{ t('clients.never_expires') }}
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
     </div>
     
     <div class="bg-white rounded shadow p-6">
       <h3 class="font-bold mb-4">{{ t('clients.traffic_limit') }}</h3>
+      {% if user.role == 'admin' %}
       <form onsubmit="updateTrafficLimit(event, {{ client.id }})" class="space-y-3">
         <div>
           <label class="block text-sm text-gray-600 mb-1">{{ t('clients.traffic_limit') }}</label>
@@ -160,6 +179,21 @@
           <i class="fas fa-save"></i> {{ t('form.update') }}
         </button>
       </form>
+      {% else %}
+      <div class="p-3 bg-blue-50 border border-blue-200 rounded">
+        <div class="text-xs text-blue-600 font-semibold mb-1">CURRENT VALUE:</div>
+        <div class="text-sm text-blue-900 font-medium">
+          {% if client.traffic_limit %}
+            {% set limit_gb = (client.traffic_limit / 1073741824)|number_format(2) %}
+            {% set total_traffic = (client.bytes_sent|default(0) + client.bytes_received|default(0)) %}
+            {% set used_gb = (total_traffic / 1073741824)|number_format(2) %}
+            {{ limit_gb }} GB (used: {{ used_gb }} GB)
+          {% else %}
+            {{ t('clients.unlimited') }}
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
   

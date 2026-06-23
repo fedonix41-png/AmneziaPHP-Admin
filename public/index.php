@@ -1580,20 +1580,12 @@ Router::get('/debug/awg-smoke', function () {
 
 // Revoke client access
 Router::post('/clients/{id}/revoke', function ($params) {
-    requireAuth();
+    requireAdmin();
     $clientId = (int) $params['id'];
 
     try {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
-
-        // Check ownership
-        $user = Auth::user();
-        if ($clientData['user_id'] != $user['id'] && !Auth::isAdmin()) {
-            http_response_code(403);
-            echo 'Forbidden';
-            return;
-        }
 
         if ($client->revoke()) {
             redirect('/servers/' . $clientData['server_id'] . '?success=Client+revoked');
@@ -1607,20 +1599,12 @@ Router::post('/clients/{id}/revoke', function ($params) {
 
 // Restore client access
 Router::post('/clients/{id}/restore', function ($params) {
-    requireAuth();
+    requireAdmin();
     $clientId = (int) $params['id'];
 
     try {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
-
-        // Check ownership
-        $user = Auth::user();
-        if ($clientData['user_id'] != $user['id'] && !Auth::isAdmin()) {
-            http_response_code(403);
-            echo 'Forbidden';
-            return;
-        }
 
         if ($client->restore()) {
             redirect('/servers/' . $clientData['server_id'] . '?success=Client+restored');
@@ -1727,7 +1711,7 @@ Router::post('/clients/{id}/sync-stats', function ($params) {
 
 // Set client expiration (web session auth)
 Router::post('/clients/{id}/set-expiration', function ($params) {
-    requireAuth();
+    requireAdmin();
     header('Content-Type: application/json');
     $clientId = (int) $params['id'];
     $raw = file_get_contents('php://input');
@@ -1739,13 +1723,6 @@ Router::post('/clients/{id}/set-expiration', function ($params) {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
 
-        $user = Auth::user();
-        if ($clientData['user_id'] != $user['id'] && !Auth::isAdmin()) {
-            http_response_code(403);
-            echo json_encode(['success' => false, 'error' => 'Forbidden']);
-            return;
-        }
-
         VpnClient::setExpiration($clientId, $expiresAt);
         echo json_encode(['success' => true, 'expires_at' => $expiresAt]);
     } catch (Exception $e) {
@@ -1756,7 +1733,7 @@ Router::post('/clients/{id}/set-expiration', function ($params) {
 
 // Set client traffic limit (web session auth)
 Router::post('/clients/{id}/set-traffic-limit', function ($params) {
-    requireAuth();
+    requireAdmin();
     header('Content-Type: application/json');
     $clientId = (int) $params['id'];
     $raw = file_get_contents('php://input');
@@ -1767,13 +1744,6 @@ Router::post('/clients/{id}/set-traffic-limit', function ($params) {
     try {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
-
-        $user = Auth::user();
-        if ($clientData['user_id'] != $user['id'] && !Auth::isAdmin()) {
-            http_response_code(403);
-            echo json_encode(['success' => false, 'error' => 'Forbidden']);
-            return;
-        }
 
         $pdo = DB::conn();
         $stmt = $pdo->prepare('UPDATE vpn_clients SET traffic_limit = ? WHERE id = ?');
@@ -2376,10 +2346,10 @@ Router::post('/api/clients/{id}/revoke', function ($params) {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
 
-        // Check ownership
-        if ($clientData['user_id'] != $user['id']) {
+        // Admin-only check
+        if ($user['role'] !== 'admin') {
             http_response_code(403);
-            echo json_encode(['error' => 'Forbidden']);
+            echo json_encode(['error' => 'Forbidden: Admin access required']);
             return;
         }
 
@@ -2409,10 +2379,10 @@ Router::post('/api/clients/{id}/restore', function ($params) {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
 
-        // Check ownership
-        if ($clientData['user_id'] != $user['id']) {
+        // Admin-only check
+        if ($user['role'] !== 'admin') {
             http_response_code(403);
-            echo json_encode(['error' => 'Forbidden']);
+            echo json_encode(['error' => 'Forbidden: Admin access required']);
             return;
         }
 
@@ -3596,10 +3566,10 @@ Router::post('/api/clients/{id}/set-expiration', function ($params) {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
 
-        // Check ownership
-        if ($clientData['user_id'] != $user['id'] && $user['role'] !== 'admin') {
+        // Admin-only check
+        if ($user['role'] !== 'admin') {
             http_response_code(403);
-            echo json_encode(['error' => 'Forbidden']);
+            echo json_encode(['error' => 'Forbidden: Admin access required']);
             return;
         }
 
@@ -3639,10 +3609,10 @@ Router::post('/api/clients/{id}/extend', function ($params) {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
 
-        // Check ownership
-        if ($clientData['user_id'] != $user['id'] && $user['role'] !== 'admin') {
+        // Admin-only check
+        if ($user['role'] !== 'admin') {
             http_response_code(403);
-            echo json_encode(['error' => 'Forbidden']);
+            echo json_encode(['error' => 'Forbidden: Admin access required']);
             return;
         }
 
@@ -3719,10 +3689,10 @@ Router::post('/api/clients/{id}/set-traffic-limit', function ($params) {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
 
-        // Check ownership
-        if ($clientData['user_id'] != $user['id'] && $user['role'] !== 'admin') {
+        // Admin-only check
+        if ($user['role'] !== 'admin') {
             http_response_code(403);
-            echo json_encode(['error' => 'Forbidden']);
+            echo json_encode(['error' => 'Forbidden: Admin access required']);
             return;
         }
 
