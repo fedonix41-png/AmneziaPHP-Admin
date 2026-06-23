@@ -20,6 +20,25 @@
         </div>
         <div><dt class="text-sm text-gray-600">Логин</dt><dd>{{ client.name|default('') }}</dd></div>
         <div><dt class="text-sm text-gray-600">{{ t('common.created') }}</dt><dd>{{ client.created_at }}</dd></div>
+        {% if users_list is not empty %}
+        <div class="pt-2 border-t mt-2">
+          <dt class="text-sm text-gray-600 font-semibold">Владелец (Пользователь панели)</dt>
+          <dd class="mt-1">
+            <form method="POST" action="/clients/{{ client.id }}/change-owner" class="flex items-center gap-2">
+              <select name="user_id" class="px-2 py-1 text-sm border rounded flex-1">
+                {% for u in users_list %}
+                  <option value="{{ u.id }}" {% if u.id == client.user_id %}selected{% endif %}>
+                    {{ u.name }} ({{ u.email }})
+                  </option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-2 rounded font-medium">
+                Сменить
+              </button>
+            </form>
+          </dd>
+        </div>
+        {% endif %}
       </dl>
       <div class="flex gap-2">
         <a href="/clients/{{ client.id }}/download" class="gradient-bg text-white px-4 py-2 rounded">

@@ -670,8 +670,8 @@ class InstallProtocolManager
                         // Use existing keys and config
                     } else {
                         // Generate new key pair for this client
-                        // Use awg for AWG2, wg for standard
-                        $keyTool = $isAwg2 ? 'awg' : 'wg';
+                        // Container uses 'wg' tool even for awg2
+                        $keyTool = 'wg';
                         $newPrivateKey = trim($server->executeCommand("docker exec {$containerArg} {$keyTool} genkey", true));
                         if (!empty($newPrivateKey)) {
                             $escapedKey = escapeshellarg($newPrivateKey);
@@ -1631,6 +1631,12 @@ class InstallProtocolManager
                 }
                 if (preg_match('/ClientID:\s*([0-9a-fA-F-]+)/i', $out, $m)) {
                     $clientId = $m[1];
+                }
+                if (preg_match('/Server Public Key:\s*([\w\+\/=]+)/i', $out, $m)) {
+                    $res['server_public_key'] = $m[1];
+                }
+                if (preg_match('/PresharedKey\s*=\s*([\w\+\/=]+)/i', $out, $m)) {
+                    $res['preshared_key'] = $m[1];
                 }
             }
             if (($protocol['slug'] ?? '') === 'xray-vless' && $clientId === null) {

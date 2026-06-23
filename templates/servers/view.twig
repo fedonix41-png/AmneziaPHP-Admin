@@ -205,6 +205,16 @@
             {% endfor %}
           </select>
         </div>
+        {% if users_list is not empty %}
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">Привязать к пользователю панели (Владелец)</label>
+          <select name="user_id" class="w-full px-3 py-2 border rounded">
+            {% for u in users_list %}
+              <option value="{{ u.id }}" {% if u.id == user.id %}selected{% endif %}>{{ u.name }} ({{ u.email }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
         <div>
           <label class="block text-sm text-gray-600 mb-1">{{ t('clients.expiration') }}</label>
           <select name="expires_in_days" class="w-full px-3 py-2 border rounded mb-2" id="expirationSelect" onchange="toggleExpirationInput()">

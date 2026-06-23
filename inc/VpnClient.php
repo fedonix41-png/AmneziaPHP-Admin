@@ -816,7 +816,7 @@ class VpnClient
         $containerName = $serverData['container_name'];
         $protocolSlug = (string) ($serverData['install_protocol'] ?? '');
         $isAwg2 = (stripos($containerName, 'awg2') !== false || $protocolSlug === 'awg2');
-        $wgTool = $isAwg2 ? 'awg' : 'wg';
+        $wgTool = 'wg';
 
         $cmd = sprintf(
             "docker exec -i %s sh -lc 'set -e; umask 077; priv=\$(%s genkey | tr -d " . '"' . "\\r\\n" . '"' . "); [ -n \"\$priv\" ] || { echo empty_private_key; exit 1; }; pub=\$(printf " . '"' . "%%s\\n" . '"' . " \"\$priv\" | %s pubkey | tr -d " . '"' . "\\r\\n" . '"' . "); [ -n \"\$pub\" ] || { echo empty_public_key; exit 1; }; printf " . '"' . "%%s\\n---\\n%%s\\n" . '"' . " \"\$priv\" \"\$pub\"'",
@@ -1301,8 +1301,8 @@ class VpnClient
         }
 
         // Determine correct tool names (awg for AWG2, wg for standard)
-        $wgTool = $isAwg2 ? 'awg' : 'wg';
-        $wgQuickTool = $isAwg2 ? 'awg-quick' : 'wg-quick';
+        $wgTool = 'wg';
+        $wgQuickTool = 'wg-quick';
 
         // 1. Create temp file for PSK (to avoid shell escaping issues)
         $pskFile = '/tmp/' . bin2hex(random_bytes(8)) . '.psk';
@@ -1672,7 +1672,7 @@ class VpnClient
         self::executeServerCommand($serverData, $writeCmd, true);
 
         // Save config
-        $wgQuickTool = $isAwg2 ? 'awg-quick' : 'wg-quick';
+        $wgQuickTool = 'wg-quick';
         $saveCmd = sprintf("docker exec -i %s %s save %s", $containerName, $wgQuickTool, $ifaceName);
         self::executeServerCommand($serverData, $saveCmd, true);
 

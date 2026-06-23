@@ -931,6 +931,11 @@ Router::get('/servers/{id}', function ($params) {
         // Get online clients for this server (Xray)
         $onlineLogins = ServerMonitoring::getOnlineClientsForServer($serverData);
 
+        $usersList = [];
+        if (Auth::isAdmin()) {
+            $usersList = Auth::listUsers();
+        }
+
         View::render('servers/view.twig', [
             'server' => $serverData,
             'clients' => $clients,
@@ -939,6 +944,7 @@ Router::get('/servers/{id}', function ($params) {
             'selected_protocol_id' => $selectedProtocolId,
             'available_protocols' => $availableProtocols,
             'online_logins' => $onlineLogins,
+            'users_list' => $usersList,
         ]);
     } catch (Exception $e) {
         error_log('Server view error: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
@@ -1166,7 +1172,11 @@ Router::post('/servers/{id}/clients/create', function ($params) {
                 $protocolId = null;
             }
         }
-        $clientId = VpnClient::create($serverId, $user['id'], $clientName, $expiresInDays, $protocolId, $username, $login);
+        $clientUserId = $user['id'];
+        if (Auth::isAdmin() && isset($_POST['user_id']) && $_POST['user_id'] !== '') {
+            $clientUserId = (int)$_POST['user_id'];
+        }
+        $clientId = VpnClient::create($serverId, $clientUserId, $clientName, $expiresInDays, $protocolId, $username, $login);
 
         // Set traffic limit if specified
         if ($trafficLimitBytes !== null && $trafficLimitBytes > 0) {
@@ -1247,12 +1257,18 @@ Router::get('/clients/{id}', function ($params) {
         } catch (Exception $e) {
             $protocolOutput = '';
         }
+        $usersList = [];
+        if (Auth::isAdmin()) {
+            $usersList = Auth::listUsers();
+        }
+
         View::render('clients/view.twig', [
             'client' => $clientData,
             'protocol_output' => $protocolOutput,
             'qr_code_vpn_url' => $qrCodeVpnUrl,
             'vpn_url_config' => $vpnUrlConfig,
-            'is_awg2' => $isAwg2
+            'is_awg2' => $isAwg2,
+            'users_list' => $usersList,
         ]);
     } catch (Exception $e) {
         http_response_code(404);
@@ -1642,6 +1658,37 @@ Router::post('/clients/{id}/delete', function ($params) {
         }
     } catch (Exception $e) {
         redirect('/dashboard?error=' . urlencode($e->getMessage()));
+    }
+});
+
+// Change client owner
+Router::post('/clients/{id}/change-owner', function ($params) {
+    requireAdmin();
+    $clientId = (int) $params['id'];
+    $newUserId = isset($_POST['user_id']) ? (int) $_POST['user_id'] : 0;
+
+    if ($newUserId <= 0) {
+        redirect('/clients/' . $clientId . '?error=Invalid+user+specified');
+        return;
+    }
+
+    try {
+        $pdo = DB::conn();
+        // Verify user exists
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM users WHERE id = ?');
+        $stmt->execute([$newUserId]);
+        if (!(int)$stmt->fetchColumn()) {
+            redirect('/clients/' . $clientId . '?error=User+not+found');
+            return;
+        }
+
+        // Update ownership
+        $stmt = $pdo->prepare('UPDATE vpn_clients SET user_id = ? WHERE id = ?');
+        $stmt->execute([$newUserId, $clientId]);
+
+        redirect('/clients/' . $clientId . '?success=Owner+updated');
+    } catch (Exception $e) {
+        redirect('/clients/' . $clientId . '?error=' . urlencode($e->getMessage()));
     }
 });
 
