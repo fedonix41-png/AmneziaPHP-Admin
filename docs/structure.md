@@ -10,7 +10,10 @@ amneziavpnphp/                          # Project root
 │   ├── .env.example                   # Environment template
 │   ├── .gitignore                     # Git ignore rules
 │   ├── apache.conf                    # Apache virtual host
-│   └── my.cnf                         # Legacy MySQL config (no longer used)
+│   ├── my.cnf                         # Legacy MySQL config (no longer used)
+│   └── .agents/rules/                 # AI agent rules
+│       ├── AGENTS.md                  # Agent architecture & role instruction
+│       └── GEMINI.md                  # Technical constraints & environment rules
 │
 ├── 🐳 Docker
 │   ├── docker-compose.yml             # 4 services: db (PG15), web, dind, telegram_bot
@@ -76,8 +79,14 @@ amneziavpnphp/                          # Project root
 │       ├── handlers/                  # Route handlers
 │       │   ├── auth.py                # Email/password login (FSM)
 │       │   ├── start.py               # /start, /help, menus
+│       │   ├── admin/                 # Admin panel handlers
+│       │   │   ├── backups.py         # Backup management (list/create/download/delete)
+│       │   │   ├── clients.py         # Client CRUD, QR/config, expiring/overlimit views
+│       │   │   ├── menu.py            # Admin main menu + server/client routing
+│       │   │   └── servers.py         # Monitoring, diagnostics, handshake testing
 │       │   └── client/                # Client operations
 │       │       ├── ai_assist.py       # AI troubleshooting
+│       │       ├── common.py          # Shared helpers (auth context, user resolution)
 │       │       ├── config.py          # QR, .conf, key reset
 │       │       ├── menu.py            # Main + admin menus
 │       │       └── stats.py           # Traffic statistics
@@ -89,19 +98,27 @@ amneziavpnphp/                          # Project root
 │       │   ├── pool.py                # Connection pool + auto-migration
 │       │   └── storage.py             # FSM state persistence
 │       ├── states/                    # aiogram FSM states
+│       │   ├── admin.py                # Admin FSM states (AddClientStates)
+│       │   └── auth.py                 # Auth FSM states
 │       ├── keyboards/                 # Inline keyboards
+│       │   ├── admin.py               # Admin keyboards (client actions, servers, backups)
+│       │   └── client.py              # Client keyboards (main menu, reset confirm)
 │       ├── middlewares/               # Access logging
+│       │   └── access.py              # Access log middleware
 │       └── utils/                     # Formatting utilities
+│           └── format.py              # humanize_bytes, humanize_date, status_label
 │
 ├── 🔧 CLI & Automation
 │   ├── bin/                           # Cron job scripts
 │   │   ├── check_expired_clients.php
 │   │   ├── check_traffic_limits.php
 │   │   ├── collect_metrics.php
-│   │   └── sync_ldap_users.php
+│   │   ├── monitor_metrics.sh          # Server metrics collection shell script
+│   │   ├── sync_ldap_users.php
+│   │   ├── translate.php               # Translation utility
+│   │   └── translate_all.php           # Batch translation script
 │   ├── scripts/                       # Utility scripts
 │   ├── update.sh                      # Deployment: git pull + composer + migrations
-│   └── Speed-up.txt                   # Performance tuning guide
 │
 ├── 📁 Data Directories
 │   ├── backups/                       # Server backup exports
@@ -263,4 +280,4 @@ tar -czf amnezia-backup-$(date +%Y%m%d).tar.gz \
 
 ---
 
-**Last Updated**: 2026-06-23
+**Last Updated**: 2026-06-24

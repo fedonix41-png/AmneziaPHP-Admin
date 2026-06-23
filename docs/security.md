@@ -80,3 +80,20 @@ if (strlen($name) < 3 || strlen($name) > 50) {
 }
 ```
 
+---
+
+## Known Vulnerabilities (TODO)
+
+### Rate limiting on auth endpoint
+`POST /api/auth/token` не имеет rate limiting — уязвим к brute-force атакам на email/password.
+Необходимо добавить промежуточный слой (например, IP-based throttle с экспоненциальной задержкой).
+
+### SSH passwords stored in plaintext
+Пароли SSH-доступа к VPN-серверам хранятся в таблице `vpn_servers` открытым текстом (или слабо обфусцированы).
+Необходимо шифрование at rest (например, через `libsodium` с ключом из `.env`).
+
+### JWT secret in database
+JWT signing secret хранится в таблице `settings` базы данных, а не в переменной окружения.
+При утечке БД злоумышленник может подписывать произвольные JWT-токены для любого пользователя.
+Необходимо перенести секрет в `.env` и генерировать через `JWT_SECRET`.
+
