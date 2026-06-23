@@ -4,6 +4,7 @@ import re
 from io import BytesIO
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
@@ -23,6 +24,19 @@ from utils.format import humanize_bytes, humanize_date, status_label
 
 router = Router(name="admin_clients")
 
+
+# ── helpers ────────────────────────────────────────────────────────────
+
+async def _safe_edit(callback: CallbackQuery, text: str, **kwargs) -> bool:
+    """Edit message, ignoring 'message is not modified' error (duplicate clicks)."""
+    try:
+        await callback.message.edit_text(text, **kwargs)
+        return True
+    except TelegramBadRequest as exc:
+        if "message is not modified" in str(exc):
+            return False
+        raise
+
 # ── Client action dispatch ─────────────────────────────────────────
 
 @router.callback_query(lambda cb: cb.data.startswith("admin:client:select:"))
@@ -39,9 +53,7 @@ async def cb_admin_client_select(callback: CallbackQuery) -> None:
     try:
         details = await panel_api.client_details(token, client_id)
     except PanelAPIError as exc:
-        await callback.message.edit_text(
-            f"⚠ {exc.message}", reply_markup=back_to_admin_kb(), parse_mode=None
-        )
+        await _safe_edit(callback, f"⚠ {exc.message}", reply_markup=back_to_admin_kb(), parse_mode=None)
         return
 
     name = details.get("name") or f"Клиент #{client_id}"
@@ -69,7 +81,7 @@ async def cb_admin_client_select(callback: CallbackQuery) -> None:
         lines.append(f"Лимит: {humanize_bytes(traffic_limit)}")
     lines.append(f"Онлайн: {'🟢 Да' if stats.get('is_online') else '⚪ Нет'}")
 
-    await callback.message.edit_text(
+    await _safe_edit(callback, 
         "\n".join(lines), reply_markup=client_action_kb(client_id, status)
     )
 
@@ -113,7 +125,7 @@ async def cb_admin_delete(callback: CallbackQuery) -> None:
     client_id = int(callback.data.rsplit(":", 1)[1])
     try:
         await panel_api.delete_client(client_id)
-        await callback.message.edit_text(
+        await _safe_edit(callback, 
             f"✅ Клиент #{client_id} удалён.", reply_markup=admin_clients_menu_kb()
         )
         await callback.answer()
@@ -124,7 +136,7 @@ async def cb_admin_delete(callback: CallbackQuery) -> None:
 @router.callback_query(lambda cb: cb.data.startswith("admin:client:setexp:"))
 async def cb_admin_setexp(callback: CallbackQuery) -> None:
     client_id = int(callback.data.rsplit(":", 1)[1])
-    await callback.message.edit_text(
+    await _safe_edit(callback, 
         f"📅 <b>Установите срок для клиента #{client_id}:</b>",
         reply_markup=expiration_options_kb(client_id),
     )
@@ -159,7 +171,7 @@ async def cb_admin_exp_clear(callback: CallbackQuery) -> None:
 @router.callback_query(lambda cb: cb.data.startswith("admin:client:limit:"))
 async def cb_admin_limit(callback: CallbackQuery) -> None:
     client_id = int(callback.data.rsplit(":", 1)[1])
-    await callback.message.edit_text(
+    await _safe_edit(callback, 
         f"📊 <b>Установите лимит трафика для клиента #{client_id}:</b>",
         reply_markup=traffic_limit_presets_kb(client_id),
     )
@@ -209,13 +221,13 @@ async def _refresh_client_view(callback: CallbackQuery, client_id: int) -> None:
             lines.append(f"Лимит: {humanize_bytes(traffic_limit)}")
         lines.append(f"Онлайн: {'🟢 Да' if stats.get('is_online') else '⚪ Нет'}")
 
-        await callback.message.edit_text(
-            "\n".join(lines), reply_markup=client_action_kb(client_id, status)
+        await _safe_edit(
+            callback,
+            "\n".join(lines),
+            reply_markup=client_action_kb(client_id, status),
         )
     except PanelAPIError as exc:
-        await callback.message.edit_text(
-            f"⚠ {exc.message}", reply_markup=back_to_admin_kb(), parse_mode=None
-        )
+        await _safe_edit(callback, f"⚠ {exc.message}", reply_markup=back_to_admin_kb(), parse_mode=None)
 
 
 # ── Expiring / Overlimit quick views ───────────────────────────────
@@ -226,14 +238,14 @@ async def cb_admin_expiring(callback: CallbackQuery) -> None:
     try:
         data = await panel_api.get_expiring_clients(days=7)
     except PanelAPIError as exc:
-        await callback.message.edit_text(
+        await _safe_edit(callback, 
             f"⚠ {exc.message}", reply_markup=back_to_admin_kb(), parse_mode=None
         )
         return
 
     clients = data.get("clients", [])
     if not clients:
-        await callback.message.edit_text(
+        await _safe_edit(callback, 
             "ℹ Нет истекающих подписок на ближайшие 7 дней.",
             reply_markup=back_to_admin_kb(),
         )
@@ -247,7 +259,7 @@ async def cb_admin_expiring(callback: CallbackQuery) -> None:
     if len(clients) > 15:
         lines.append(f"… и ещё {len(clients) - 15}")
 
-    await callback.message.edit_text(
+    await _safe_edit(callback, 
         "\n".join(lines), reply_markup=back_to_admin_kb()
     )
 
@@ -258,14 +270,14 @@ async def cb_admin_overlimit(callback: CallbackQuery) -> None:
     try:
         data = await panel_api.get_overlimit_clients()
     except PanelAPIError as exc:
-        await callback.message.edit_text(
+        await _safe_edit(callback, 
             f"⚠ {exc.message}", reply_markup=back_to_admin_kb(), parse_mode=None
         )
         return
 
     clients = data.get("clients", [])
     if not clients:
-        await callback.message.edit_text(
+        await _safe_edit(callback, 
             "ℹ Нет клиентов с превышением лимита.",
             reply_markup=back_to_admin_kb(),
         )
@@ -279,7 +291,7 @@ async def cb_admin_overlimit(callback: CallbackQuery) -> None:
     if len(clients) > 15:
         lines.append(f"… и ещё {len(clients) - 15}")
 
-    await callback.message.edit_text(
+    await _safe_edit(callback, 
         "\n".join(lines), reply_markup=back_to_admin_kb()
     )
 
@@ -361,7 +373,7 @@ async def step_add_server(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     name = data.get("client_name", "—")
 
-    await callback.message.edit_text(
+    await _safe_edit(callback, 
         f"⏱ <b>Срок действия для «{name}»:</b>",
         reply_markup=add_client_duration_kb(),
     )
@@ -391,7 +403,7 @@ async def step_add_duration(callback: CallbackQuery, state: FSMContext) -> None:
             expires_in_days=days if days > 0 else None,
         )
     except PanelAPIError as exc:
-        await callback.message.edit_text(
+        await _safe_edit(callback, 
             f"⚠ Не удалось создать: {exc.message}",
             reply_markup=back_to_admin_kb(),
             parse_mode=None,
@@ -414,7 +426,7 @@ async def step_add_duration(callback: CallbackQuery, state: FSMContext) -> None:
     elif days == 0:
         lines.append("Срок: ♾ бессрочно")
 
-    await callback.message.edit_text("\n".join(lines), reply_markup=back_to_admin_kb())
+    await _safe_edit(callback, "\n".join(lines), reply_markup=back_to_admin_kb())
 
     if qr_b64:
         try:

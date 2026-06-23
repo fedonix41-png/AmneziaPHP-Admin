@@ -20,7 +20,7 @@ class AuthContext:
     error: Optional[str]
 
 
-async def resolve_client(telegram_id: int) -> AuthContext:
+async def resolve_client(telegram_id: int, sync_stats: bool = False) -> AuthContext:
     jwt = await users_repo.get_jwt(telegram_id)
     if not jwt:
         return AuthContext(None, None, None, [], False, "🔒 Сначала авторизуйтесь — нажмите «🔑 Авторизация».")
@@ -29,7 +29,7 @@ async def resolve_client(telegram_id: int) -> AuthContext:
 
     try:
         if client_id:
-            details = await panel_api.client_details(jwt, client_id)
+            details = await panel_api.client_details(jwt, client_id, sync_stats=sync_stats)
             return AuthContext(jwt, client_id, details, [], False, None)
         clients = await panel_api.list_my_clients(jwt)
     except PanelAPIError as exc:
@@ -46,7 +46,7 @@ async def resolve_client(telegram_id: int) -> AuthContext:
         if single_id:
             await users_repo.set_client_id(telegram_id, single_id)
             try:
-                details = await panel_api.client_details(jwt, single_id)
+                details = await panel_api.client_details(jwt, single_id, sync_stats=sync_stats)
             except PanelAPIError as exc:
                 return AuthContext(jwt, single_id, None, [], False, f"⚠ Не удалось получить данные: {exc.message}")
             return AuthContext(jwt, single_id, details, [], False, None)

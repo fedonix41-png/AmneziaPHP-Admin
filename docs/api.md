@@ -154,6 +154,9 @@ The `qr_code` field contains a data URI that can be used directly in HTML:
 
 ### Get Client QR Code
 
+> **Note:** For WireGuard/AWG clients, the QR code is regenerated from the server's live
+> container state before returning, same as `/details`.
+
 ```bash
 curl -X GET http://localhost:8082/api/clients/1/qr \
   -H "Authorization: Bearer $TOKEN"
@@ -169,6 +172,10 @@ Response:
 ```
 
 ### Get Client Details with Stats, Config and QR
+
+> **Note:** For WireGuard/AWG clients (`amnezia-wg`, `awg2`, etc.), the endpoint automatically
+> regenerates the config from the server's live container state before returning it.
+> This ensures AWG obfuscation parameters (Jc, Jmin, Jmax, S1-S4, H1-H4) are always current.
 
 ```bash
 curl -X GET http://localhost:8082/api/clients/1/details \

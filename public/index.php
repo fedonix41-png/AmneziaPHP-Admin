@@ -2320,12 +2320,40 @@ Router::get('/api/clients/{id}/details', function ($params) {
             return;
         }
 
-        // Sync stats before returning
-        $client->syncStats();
+        // For WireGuard/AWG clients, regenerate config from current server state
+        // to avoid stale AWG parameters (same as download endpoint).
+        $protocolSlug = '';
+        $protocolId = (int) ($clientData['protocol_id'] ?? 0);
+        if ($protocolId > 0) {
+            try {
+                $pdo = DB::conn();
+                $stmtProto = $pdo->prepare('SELECT slug FROM protocols WHERE id = ? LIMIT 1');
+                $stmtProto->execute([$protocolId]);
+                $protocolSlug = (string) $stmtProto->fetchColumn();
+            } catch (Exception $e) {
+                // ignore
+            }
+        }
+        $isAwg = in_array($protocolSlug, ['amnezia-wg-advanced', 'wireguard-standard', 'amnezia-wg', 'awg2'], true);
+        if ($isAwg) {
+            try {
+                $client->regenerateConfigFromServer(true);
+                $client = new VpnClient($clientId);
+                $clientData = $client->getData();
+            } catch (Throwable $e) {
+                error_log('Failed to regenerate client config in API /details: ' . $e->getMessage());
+            }
+        }
 
-        // Reload data
-        $client = new VpnClient($clientId);
-        $clientData = $client->getData();
+        // Sync live stats from VPN server only when requested.
+        // Pass ?sync=0 to skip SSH and use cached DB values (fast).
+        $shouldSync = ($_GET['sync'] ?? '1') !== '0';
+        if ($shouldSync) {
+            $client->syncStats();
+            // Reload data after sync
+            $client = new VpnClient($clientId);
+            $clientData = $client->getData();
+        }
         $stats = $client->getFormattedStats();
 
         // Get server name for context
@@ -2382,6 +2410,30 @@ Router::get('/api/clients/{id}/qr', function ($params) {
             http_response_code(403);
             echo json_encode(['error' => 'Forbidden']);
             return;
+        }
+
+        // For WireGuard/AWG clients, regenerate config from server
+        // to ensure QR code is based on current config with valid AWG params.
+        $protocolSlug = '';
+        $protocolId = (int) ($clientData['protocol_id'] ?? 0);
+        if ($protocolId > 0) {
+            try {
+                $pdo = DB::conn();
+                $stmtProto = $pdo->prepare('SELECT slug FROM protocols WHERE id = ? LIMIT 1');
+                $stmtProto->execute([$protocolId]);
+                $protocolSlug = (string) $stmtProto->fetchColumn();
+            } catch (Exception $e) {
+                // ignore
+            }
+        }
+        if (in_array($protocolSlug, ['amnezia-wg-advanced', 'wireguard-standard', 'amnezia-wg', 'awg2'], true)) {
+            try {
+                $client->regenerateConfigFromServer(true);
+                $client = new VpnClient($clientId);
+                $clientData = $client->getData();
+            } catch (Throwable $e) {
+                error_log('Failed to regenerate client config in API /qr: ' . $e->getMessage());
+            }
         }
 
         echo json_encode([
@@ -2614,13 +2666,15 @@ Router::get('/api/servers/{id}/clients', function ($params) {
             return;
         }
 
-        // Sync all stats first
-        VpnClient::syncAllStatsForServer($serverId);
+        // Do NOT sync all stats here — it runs SSH commands to remote server
+        // for every client, making the list view unbearably slow. Stats will be
+        // synced on-demand when viewing individual client details.
 
         $clients = VpnClient::listByServer($serverId);
         $clientsData = [];
 
         foreach ($clients as $clientData) {
+            // getFormattedStats() reads from local DB cache — fast, no SSH
             $client = new VpnClient($clientData['id']);
             $stats = $client->getFormattedStats();
 
@@ -3524,23 +3578,10 @@ Router::post('/api/clients/create', function () {
         $clientId = VpnClient::create($serverId, (int) $user['id'], $name, $expiresInDays, $protocolId, $username, $login);
 
         $client = new VpnClient($clientId);
-
-        // For WireGuard/AWG protocols, immediately regenerate config from live server state
-        // (AWG junk params + keys can change after reinstall/recreate).
-        // For amnezia-wg-advanced, fail fast if we can't obtain AWG params.
-        try {
-            $regen = $client->regenerateConfigFromServer(true);
-            if (is_array($regen) && empty($regen['success']) && ($regen['error'] ?? '') === 'awg_params_missing') {
-                http_response_code(500);
-                echo json_encode([
-                    'error' => 'Failed to generate AWG-Advanced config: missing server AWG params',
-                    'result' => $regen,
-                ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
-                return;
-            }
-        } catch (Throwable $e) {
-            error_log('Failed to regenerate config after create: ' . $e->getMessage());
-        }
+        // Config, keys and QR are already generated inside VpnClient::create().
+        // No need for a second regenerateConfigFromServer() round-trip here —
+        // that doubles the SSH time for a fresh client. Use /regenerate-config
+        // endpoint later if the server was reinstalled and config needs refresh.
 
         $clientData = $client->getData();
 

@@ -91,12 +91,14 @@ class PanelAPI:
         data = self._handle(response, context)
         return data.get("clients", []) or []
 
-    async def client_details(self, token: str, client_id: int) -> Dict[str, Any]:
+    async def client_details(self, token: str, client_id: int, sync_stats: bool = False) -> Dict[str, Any]:
+        """Fetch client details. Set sync_stats=True to pull live traffic from VPN server (slow, SSH)."""
         context = "Данные подписки"
         try:
             response = await self.client.get(
                 f"/api/clients/{client_id}/details",
                 headers=self._bearer(token),
+                params={"sync": "1" if sync_stats else "0"},
             )
         except httpx.HTTPError as exc:
             raise PanelAPIError(f"{context}: нет связи с панелью ({str(exc) or type(exc).__name__})") from exc

@@ -217,8 +217,9 @@ class VpnClient
             $defaultAwgParams = self::getAwgParamDefaults($slug);
 
             // Add AWG parameters (use UPPERCASE keys internal logic)
+            // Skip empty-string values to avoid overwriting defaults with blanks.
             foreach (array_keys($defaultAwgParams) as $key) {
-                if (isset($cleanAwgParams[$key])) {
+                if (isset($cleanAwgParams[$key]) && $cleanAwgParams[$key] !== '') {
                     $vars[$key] = $cleanAwgParams[$key];
                 } else {
                     $vars[$key] = $defaultAwgParams[$key];
@@ -969,6 +970,9 @@ class VpnClient
             if (preg_match('/^(Jc|Jmin|Jmax|S1|S2|S3|S4|H1|H2|H3|H4|I1|I2|I3|I4|I5)\s*=\s*(.*)$/i', $line, $m)) {
                 $k = strtoupper($m[1]);
                 $value = trim($m[2]);
+                if ($value === '') {
+                    continue;
+                }
                 $awgParams[$k] = ctype_digit($value) ? (int) $value : $value;
             }
         }
@@ -1220,10 +1224,15 @@ class VpnClient
         }
         
         // Merge: use server params only if they have correct format, otherwise use defaults
-        // This is critical for H1-H4 which must have "value1-value2" format
+        // Empty-string values are skipped to avoid overwriting defaults with blanks.
         $finalParams = $defaultParams;
         foreach ($normalizedAwgParams as $key => $value) {
             $upperKey = strtoupper($key);
+            
+            // Skip empty-string values — they would overwrite defaults with nothing
+            if (is_string($value) && $value === '') {
+                continue;
+            }
             
             // For H1-H4 parameters, only use server value if it has the correct "value1-value2" format
             if (in_array($upperKey, ['H1', 'H2', 'H3', 'H4'], true)) {
@@ -1918,7 +1927,7 @@ class VpnClient
         ];
 
         foreach (array_keys(self::getAwgParamDefaults($slug)) as $key) {
-            if (isset($awgParams[$key])) {
+            if (isset($awgParams[$key]) && $awgParams[$key] !== '') {
                 $vars[$key] = $awgParams[$key];
             }
         }

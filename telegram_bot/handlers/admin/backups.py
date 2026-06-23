@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, CallbackQuery
 
 from keyboards.admin import (
@@ -15,6 +16,19 @@ from services.panel_api import PanelAPIError, panel_api
 from utils.format import humanize_bytes, humanize_date
 
 router = Router(name="admin_backups")
+
+
+# ── helpers ────────────────────────────────────────────────────────────
+
+async def _safe_edit(callback: CallbackQuery, text: str, **kwargs) -> bool:
+    """Edit message, ignoring 'message is not modified' error (duplicate clicks)."""
+    try:
+        await callback.message.edit_text(text, **kwargs)
+        return True
+    except TelegramBadRequest as exc:
+        if "message is not modified" in str(exc):
+            return False
+        raise
 
 _stored_backup_server: dict[int, int] = {}
 
@@ -33,22 +47,20 @@ async def cb_admin_backups_menu(callback: CallbackQuery) -> None:
 
 
 async def _show_backup_list(callback: CallbackQuery, server_id: int) -> None:
+    await callback.answer()  # acknowledge before API call
     try:
         data = await panel_api.list_backups(server_id)
     except PanelAPIError as exc:
-        await callback.message.edit_text(
-            f"⚠ {exc.message}", reply_markup=admin_servers_menu_kb(), parse_mode=None
-        )
-        await callback.answer()
+        await _safe_edit(callback, f"⚠ {exc.message}", reply_markup=admin_servers_menu_kb(), parse_mode=None)
         return
 
     backups = data.get("backups", [])
     if not backups:
-        await callback.message.edit_text(
+        await _safe_edit(
+            callback,
             f"💾 <b>Бэкапы сервера #{server_id}</b>\n\nℹ Нет бэкапов.",
             reply_markup=backup_list_kb(server_id, []),
         )
-        await callback.answer()
         return
 
     lines = [f"💾 <b>Бэкапы сервера #{server_id} ({len(backups)})</b>:"]
@@ -58,10 +70,7 @@ async def _show_backup_list(callback: CallbackQuery, server_id: int) -> None:
         ts = b.get("created_at", "")
         lines.append(f"  • {name} ({size_kb}KB, {humanize_date(ts)})")
 
-    await callback.message.edit_text(
-        "\n".join(lines), reply_markup=backup_list_kb(server_id, backups)
-    )
-    await callback.answer()
+    await _safe_edit(callback, "\n".join(lines), reply_markup=backup_list_kb(server_id, backups))
 
 
 @router.callback_query(lambda cb: cb.data.startswith("admin:backup:select:"))
@@ -72,7 +81,8 @@ async def cb_admin_backup_select(callback: CallbackQuery) -> None:
         await callback.answer("⚠ Ошибка", show_alert=True)
         return
 
-    await callback.message.edit_text(
+    await _safe_edit(
+        callback,
         f"💾 <b>Бэкап #{backup_id}</b>",
         reply_markup=backup_action_kb(backup_id),
     )
@@ -99,7 +109,8 @@ async def cb_admin_backup_create(callback: CallbackQuery) -> None:
     name = backup.get("backup_name", "")
     size = (backup.get("backup_size") or 0) // 1024
 
-    await callback.message.edit_text(
+    await _safe_edit(
+        callback,
         f"✅ <b>Бэкап создан!</b>\n#{bid} — {name} ({size}KB)",
         reply_markup=back_to_admin_kb(),
     )
@@ -151,5 +162,5 @@ async def cb_admin_backup_list_return(callback: CallbackQuery) -> None:
     if server_id:
         await _show_backup_list(callback, server_id)
     else:
-        await callback.message.edit_text("ℹ Сервер не выбран.", reply_markup=back_to_admin_kb())
+        await _safe_edit(callback, "ℹ Сервер не выбран.", reply_markup=back_to_admin_kb())
         await callback.answer()

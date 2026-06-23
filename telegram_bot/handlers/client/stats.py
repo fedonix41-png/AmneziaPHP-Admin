@@ -17,7 +17,7 @@ router = Router(name="client.stats")
 
 @router.callback_query(F.data == "menu:stats")
 async def cb_stats(callback: CallbackQuery) -> None:
-    ctx = await resolve_client(callback.from_user.id)
+    ctx = await resolve_client(callback.from_user.id, sync_stats=True)
     if await answer_unresolved(callback.message, ctx):
         await callback.answer()
         return

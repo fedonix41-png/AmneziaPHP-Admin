@@ -1,11 +1,25 @@
 from __future__ import annotations
 
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 
 from keyboards.admin import admin_servers_menu_kb, simple_back_kb
 from services.panel_api import PanelAPIError, panel_api
 from utils.format import humanize_bytes, humanize_date
+
+
+# ── helpers ────────────────────────────────────────────────────────────
+
+async def _safe_edit(callback: CallbackQuery, text: str, **kwargs) -> bool:
+    """Edit message, ignoring 'message is not modified' error (duplicate clicks)."""
+    try:
+        await callback.message.edit_text(text, **kwargs)
+        return True
+    except TelegramBadRequest as exc:
+        if "message is not modified" in str(exc):
+            return False
+        raise
 
 
 def _to_float(value) -> float | None:
@@ -46,9 +60,7 @@ async def cb_admin_monitor(callback: CallbackQuery) -> None:
         metrics_list = await panel_api.server_metrics(server_id, hours=1)
         online = await panel_api.server_online(server_id)
     except PanelAPIError as exc:
-        await callback.message.edit_text(
-            f"⚠ {exc.message}", reply_markup=admin_servers_menu_kb(), parse_mode=None
-        )
+        await _safe_edit(callback, f"⚠ {exc.message}", reply_markup=admin_servers_menu_kb(), parse_mode=None)
         return
 
     # latest metric
@@ -90,9 +102,7 @@ async def cb_admin_monitor(callback: CallbackQuery) -> None:
         if len(online) > 20:
             lines.append(f"  … и ещё {len(online) - 20}")
 
-    await callback.message.edit_text(
-        "\n".join(lines), reply_markup=admin_servers_menu_kb()
-    )
+    await _safe_edit(callback, "\n".join(lines), reply_markup=admin_servers_menu_kb())
 
 
 @router.callback_query(lambda cb: cb.data == "admin:srv:diagnose")
@@ -108,7 +118,8 @@ async def cb_admin_diagnose(callback: CallbackQuery) -> None:
     try:
         selftest = await panel_api.server_selftest(server_id)
     except PanelAPIError as exc:
-        await callback.message.edit_text(
+        await _safe_edit(
+            callback,
             f"⚠ Селф-тест не удался: {exc.message}",
             reply_markup=admin_servers_menu_kb(),
             parse_mode=None,
@@ -134,9 +145,7 @@ async def cb_admin_diagnose(callback: CallbackQuery) -> None:
                 status = "✅" if check_data.get("ok") else "❌"
                 lines.append(f"  {status} {check_name}")
 
-    await callback.message.edit_text(
-        "\n".join(lines), reply_markup=admin_servers_menu_kb()
-    )
+    await _safe_edit(callback, "\n".join(lines), reply_markup=admin_servers_menu_kb())
 
 
 @router.callback_query(lambda cb: cb.data.startswith("admin:handshake:"))
@@ -155,9 +164,7 @@ async def cb_admin_handshake(callback: CallbackQuery) -> None:
     try:
         result = await panel_api.server_diagnose_handshake(server_id, client_id=client_id, duration_seconds=5)
     except PanelAPIError as exc:
-        await callback.message.edit_text(
-            f"⚠ {exc.message}", reply_markup=admin_servers_menu_kb(), parse_mode=None
-        )
+        await _safe_edit(callback, f"⚠ {exc.message}", reply_markup=admin_servers_menu_kb(), parse_mode=None)
         return
 
     hints = result.get("hints", [])
@@ -172,6 +179,4 @@ async def cb_admin_handshake(callback: CallbackQuery) -> None:
     if evidence.get("docker_ps"):
         lines.append(f"\n📦 <code>{evidence['docker_ps'].strip()[:500]}</code>")
 
-    await callback.message.edit_text(
-        "\n".join(lines), reply_markup=admin_servers_menu_kb()
-    )
+    await _safe_edit(callback, "\n".join(lines), reply_markup=admin_servers_menu_kb())
