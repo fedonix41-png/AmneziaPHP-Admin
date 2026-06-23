@@ -2,7 +2,7 @@
 -- Date: 2025-11-10
 
 -- English translations
-INSERT IGNORE INTO translations (locale, category, key_name, translation) VALUES
+INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'ldap', 'settings', 'LDAP Settings'),
 ('en', 'ldap', 'enable_ldap_auth', 'Enable LDAP Authentication'),
 ('en', 'ldap', 'enable_description', 'Allow users to login using LDAP/Active Directory credentials'),
@@ -28,7 +28,7 @@ INSERT IGNORE INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'ldap', 'description', 'Description');
 
 -- Russian translations
-INSERT IGNORE INTO translations (locale, category, key_name, translation) VALUES
+INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'ldap', 'settings', 'Настройки LDAP'),
 ('ru', 'ldap', 'enable_ldap_auth', 'Включить LDAP аутентификацию'),
 ('ru', 'ldap', 'enable_description', 'Разрешить пользователям входить используя учетные данные LDAP/Active Directory'),
@@ -54,7 +54,7 @@ INSERT IGNORE INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'ldap', 'description', 'Описание');
 
 -- Common translations for buttons
-INSERT IGNORE INTO translations (locale, category, key_name, translation) VALUES
+INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'common', 'save', 'Save'),
 ('en', 'common', 'cancel', 'Cancel'),
 ('ru', 'common', 'save', 'Сохранить'),

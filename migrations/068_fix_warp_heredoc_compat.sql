@@ -150,7 +150,7 @@ if [ -n "$REDSOCKS_BIN" ]; then
   echo "redsocks-warp started"
 
   ROUTED_SUBNETS=""
-  for container in $(docker ps --format "{{`{{.Names}}`}}" 2>/dev/null | grep -iE "amnezia-awg|awg" || true); do
+  for container in $(docker ps --format "{{{{.Names}}}}" 2>/dev/null | grep -iE "amnezia-awg|awg" || true); do
     SUBNET=$(docker exec "$container" cat /opt/amnezia/awg/wg0.conf 2>/dev/null | grep -oP "Address\\s*=\\s*\\K[0-9./]+" | head -1 || true)
     if [ -z "$SUBNET" ]; then
       SUBNET=$(docker exec "$container" cat /opt/amnezia/awg/awg0.conf 2>/dev/null | grep -oP "Address\\s*=\\s*\\K[0-9./]+" | head -1 || true)

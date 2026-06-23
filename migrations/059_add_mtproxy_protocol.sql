@@ -106,8 +106,8 @@ WHERE slug = 'mtproxy';
 -- 5. Add translations for MTProxy
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'protocols', 'protocol_mtproxy', 'MTProxy (Telegram)')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'protocols', 'protocol_mtproxy', 'MTProxy (Telegram)')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;

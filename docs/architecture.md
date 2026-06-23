@@ -1,5 +1,28 @@
 # Architecture
 
+## Database
+
+Проект использует **PostgreSQL 15** как единственную СУБД.
+
+| База данных     | Назначение                                      |
+|-----------------|-------------------------------------------------|
+| `amnezia_panel` | Данные веб-панели (пользователи, серверы, клиенты, переводы) |
+| `telegram_bot`  | Данные Telegram-бота (пользователи, платежи, FSM-сессии)     |
+
+### Инициализация
+
+- `docker-entrypoint-initdb.d/01-init-multiple-databases.sh` — создаёт обе БД
+- `docker-entrypoint-initdb.d/02-baseline-schema.sql` — baseline-схема `amnezia_panel`
+- `docker-entrypoint-initdb.d/03-telegram-bot-schema.sql` — схема `telegram_bot`
+
+### Миграции (`migrations/`)
+
+Применяются через `update.sh` при каждом обновлении через `psql`. Все файлы написаны в **PostgreSQL-синтаксисе** (SERIAL/BIGSERIAL, ON CONFLICT, ADD COLUMN IF NOT EXISTS, DO $$ blocks).
+
+Трекинг применённых миграций: таблица `schema_migrations` в БД `amnezia_panel`.
+
+---
+
 ## Project Architecture
 
 ### MVC Pattern
@@ -76,6 +99,7 @@ View::render('template.twig', [
 #### 5. Models
 
 **VpnServer** (`inc/VpnServer.php`):
+
 ```php
 // Create and deploy server
 $serverId = VpnServer::create($userId, $name, $host, $port, $username, $password);
@@ -93,6 +117,7 @@ $userServers = VpnServer::listByUser($userId);
 ```
 
 **VpnClient** (`inc/VpnClient.php`):
+
 ```php
 // Create client
 $clientId = VpnClient::create($serverId, $userId, $name);
@@ -123,4 +148,3 @@ $qrImage = QrUtil::pngBase64($payload);
 // Use in template
 echo '<img src="' . $qrImage . '">';
 ```
-

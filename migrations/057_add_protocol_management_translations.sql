@@ -22,7 +22,7 @@ INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'protocols', 'active_only', 'Только активные'),
 ('en', 'protocols', 'with_ai_generations', 'With AI generations'),
 ('ru', 'protocols', 'with_ai_generations', 'С AI-генерациями')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 -- Hide protocols that should not be published
 UPDATE protocols

@@ -7,4 +7,4 @@ INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'protocols', 'variable_last_config_json_help', 'Full configuration as a JSON object (required for Amnezia format)'),
 ('en', 'protocols', 'plus_all_output_variables', 'Plus all variables from the Output Template section'),
 ('en', 'ai', 'prompt_placeholder_qr_template', 'Describe how the QR code payload should be structured (e.g., "Standard WireGuard config format" or "JSON with specific fields")')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;

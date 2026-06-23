@@ -248,49 +248,49 @@ FROM protocols p WHERE p.slug = 'cf-warp'
 -- 4. Add translations for Cloudflare WARP
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'protocols', 'protocol_cf_warp', 'Cloudflare WARP Proxy')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'protocols', 'protocol_cf_warp', 'Cloudflare WARP Прокси')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 -- WARP-specific UI translations
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'protocols', 'warp_status', 'WARP Status')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'protocols', 'warp_status', 'Статус WARP')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'protocols', 'warp_connected', 'Connected via Cloudflare')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'protocols', 'warp_connected', 'Подключён через Cloudflare')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'protocols', 'warp_disconnected', 'Disconnected')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'protocols', 'warp_disconnected', 'Отключён')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'protocols', 'warp_proxy_info', 'WARP proxy adds a Cloudflare encryption layer to hide destination domains from VPS provider. Traffic chain: Client → AmneziaWG → WARP → Cloudflare → Internet')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'protocols', 'warp_proxy_info', 'WARP прокси добавляет слой шифрования Cloudflare для скрытия конечных доменов от провайдера VPS. Цепочка: Клиент → AmneziaWG → WARP → Cloudflare → Интернет')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'protocols', 'warp_warning_ram', '⚠️ Cloudflare WARP uses ~50-100MB additional RAM')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'protocols', 'warp_warning_ram', '⚠️ Cloudflare WARP использует ~50-100 МБ дополнительной RAM')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;

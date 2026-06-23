@@ -8,4 +8,4 @@ INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('de', 'clients', 'connection_instructions', 'Verbindungsanweisungen'),
 ('fr', 'clients', 'connection_instructions', 'Instructions de connexion'),
 ('zh', 'clients', 'connection_instructions', '连接说明')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;

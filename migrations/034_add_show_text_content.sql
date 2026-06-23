@@ -7,4 +7,4 @@ INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'protocols', 'qr_code_format_text', 'Simple Text'),
 ('ru', 'protocols', 'show_text_content', 'Показывать текстовое содержимое на странице клиента'),
 ('ru', 'protocols', 'qr_code_format_text', 'Простой текст')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;

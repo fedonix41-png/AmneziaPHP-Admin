@@ -68,6 +68,7 @@ try {
 ## Authentication
 
 ### Get JWT Token
+
 ```bash
 curl -X POST http://localhost:8082/api/auth/token \
   -d "email=admin@amnez.ia&password=admin123"
@@ -86,6 +87,7 @@ Response:
 ## Protocols
 
 ### List Active Protocols (for JWT API clients)
+
 ```bash
 curl -X GET http://localhost:8082/api/protocols/active \
   -H "Authorization: Bearer $TOKEN"
@@ -104,6 +106,7 @@ Example response:
 ```
 
 ### Install Protocol on Server
+
 ```bash
 curl -X POST http://localhost:8082/api/servers/1/protocols/install \
   -H "Authorization: Bearer $TOKEN" \
@@ -114,6 +117,7 @@ curl -X POST http://localhost:8082/api/servers/1/protocols/install \
 ## Clients
 
 ### Create Client with QR Code
+
 ```bash
 TOKEN="your-jwt-token"
 
@@ -149,6 +153,7 @@ The `qr_code` field contains a data URI that can be used directly in HTML:
 ```
 
 ### Get Client QR Code
+
 ```bash
 curl -X GET http://localhost:8082/api/clients/1/qr \
   -H "Authorization: Bearer $TOKEN"
@@ -164,6 +169,7 @@ Response:
 ```
 
 ### Get Client Details with Stats, Config and QR
+
 ```bash
 curl -X GET http://localhost:8082/api/clients/1/details \
   -H "Authorization: Bearer $TOKEN"
@@ -199,12 +205,14 @@ Response:
 ## Servers
 
 ### List Servers
+
 ```bash
 curl -X GET http://localhost:8082/api/servers \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ### Create Server
+
 ```bash
 curl -X POST http://localhost:8082/api/servers/create \
   -H "Authorization: Bearer $TOKEN" \
@@ -219,6 +227,7 @@ curl -X POST http://localhost:8082/api/servers/create \
 ```
 
 ### Get Server Clients
+
 ```bash
 curl -X GET http://localhost:8082/api/servers/1/clients \
   -H "Authorization: Bearer $TOKEN"
@@ -227,18 +236,21 @@ curl -X GET http://localhost:8082/api/servers/1/clients \
 ## Client Management
 
 ### Revoke Client
+
 ```bash
 curl -X POST http://localhost:8082/api/clients/1/revoke \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ### Restore Client
+
 ```bash
 curl -X POST http://localhost:8082/api/clients/1/restore \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ### Delete Client
+
 ```bash
 curl -X DELETE http://localhost:8082/api/clients/1/delete \
   -H "Authorization: Bearer $TOKEN"
@@ -247,6 +259,7 @@ curl -X DELETE http://localhost:8082/api/clients/1/delete \
 ## Integration Examples
 
 ### Python Example
+
 ```python
 import requests
 import base64
@@ -282,6 +295,7 @@ print(f"QR code saved to qr_code.png")
 ```
 
 ### JavaScript/Node.js Example
+
 ```javascript
 const axios = require('axios');
 const fs = require('fs');
@@ -313,6 +327,7 @@ console.log('QR code saved to qr_code.png');
 ```
 
 ### Display QR Code in Web Page
+
 ```html
 <!DOCTYPE html>
 <html>

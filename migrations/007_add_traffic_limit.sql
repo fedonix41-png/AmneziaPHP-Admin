@@ -2,5 +2,5 @@
 -- This migration adds traffic limit functionality to clients
 
 ALTER TABLE vpn_clients 
-ADD COLUMN traffic_limit BIGINT UNSIGNED NULL COMMENT 'Traffic limit in bytes (NULL = unlimited)' AFTER expires_at,
+ADD COLUMN IF NOT EXISTS traffic_limit BIGINT UNSIGNED NULL COMMENT 'Traffic limit in bytes (NULL = unlimited)',
 ADD INDEX idx_traffic_limit (traffic_limit);

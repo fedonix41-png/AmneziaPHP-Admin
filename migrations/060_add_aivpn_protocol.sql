@@ -149,8 +149,8 @@ FROM protocols p WHERE p.slug = 'aivpn'
 -- 4. Add translations for AIVPN
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'protocols', 'protocol_aivpn', 'AIVPN (AI-Powered)')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;
 
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'protocols', 'protocol_aivpn', 'AIVPN (ИИ-протокол)')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;

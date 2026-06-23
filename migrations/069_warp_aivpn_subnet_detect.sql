@@ -152,8 +152,8 @@ if [ -n "$REDSOCKS_BIN" ]; then
 
   # 1. Detect AWG container IPs (containers MASQUERADE VPN traffic,
   #    so on the host we see src=container_IP, not VPN subnet)
-  for container in $(docker ps --format "{{`{{.Names}}`}}" 2>/dev/null | grep -iE "amnezia-awg|awg" || true); do
-    CIP=$(docker inspect -f "{{`{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}`}}" "$container" 2>/dev/null || true)
+  for container in $(docker ps --format "{{{{.Names}}}}" 2>/dev/null | grep -iE "amnezia-awg|awg" || true); do
+    CIP=$(docker inspect -f "{{{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}}}" "$container" 2>/dev/null || true)
     if [ -n "$CIP" ]; then
       CONTAINER_IPS="$CONTAINER_IPS $CIP"
       echo "AWG container $container IP: $CIP"

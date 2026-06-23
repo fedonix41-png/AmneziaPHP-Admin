@@ -67,4 +67,4 @@ INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'ai', 'confirm_apply_script', 'Это заменит текущее содержимое поля. Продолжить?'),
 ('ru', 'ai', 'please_enter_requirements', 'Пожалуйста, введите требования'),
 ('ru', 'ai', 'error_generating_script', 'Ошибка генерации')
-ON DUPLICATE KEY UPDATE translation = VALUES(translation);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;

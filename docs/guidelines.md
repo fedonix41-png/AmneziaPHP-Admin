@@ -11,6 +11,7 @@ Guide for developers contributing to Amnezia VPN Web Panel.
 **1. Add database column**
 
 Create migration `migrations/002_add_stats.sql`:
+
 ```sql
 ALTER TABLE vpn_servers ADD COLUMN stats_json TEXT;
 ```
@@ -18,6 +19,7 @@ ALTER TABLE vpn_servers ADD COLUMN stats_json TEXT;
 **2. Add method to model**
 
 Edit `inc/VpnServer.php`:
+
 ```php
 public function getStats(): array {
     if (!$this->data['stats_json']) {
@@ -44,6 +46,7 @@ private function collectStatsFromServer(): array {
 **3. Add route**
 
 Edit `public/index.php`:
+
 ```php
 Router::get('/servers/{id}/stats', function($params) {
     requireAuth();
@@ -60,6 +63,7 @@ Router::get('/servers/{id}/stats', function($params) {
 **4. Add template**
 
 Create `templates/servers/stats.twig`:
+
 ```twig
 {% extends "layout.twig" %}
 
@@ -81,6 +85,7 @@ Create `templates/servers/stats.twig`:
 **5. Update navigation**
 
 Edit `templates/layout.twig`:
+
 ```twig
 <a href="/servers/{{ server.id }}/stats">Statistics</a>
 ```
@@ -196,6 +201,7 @@ class VpnServerTest extends TestCase
 ```
 
 Run tests:
+
 ```bash
 composer require --dev phpunit/phpunit
 ./vendor/bin/phpunit tests/
@@ -278,6 +284,7 @@ footer (optional)
 ```
 
 Types:
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation
@@ -287,6 +294,7 @@ Types:
 - `chore`: Maintenance
 
 Example:
+
 ```
 feat: add server statistics dashboard
 

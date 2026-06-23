@@ -145,4 +145,4 @@ INSERT INTO translations (language_code, translation_key, translation_value) VAL
 ('es', 'servers.import_failed', 'Error de importación'),
 ('es', 'servers.import_partial', 'Importados {0} de {1} clientes'),
 ('es', 'servers.import_history', 'Historial de importación')
-ON DUPLICATE KEY UPDATE translation_value=VALUES(translation_value);
+ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation;

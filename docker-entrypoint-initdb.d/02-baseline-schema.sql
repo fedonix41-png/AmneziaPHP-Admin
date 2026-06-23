@@ -1,9 +1,22 @@
 -- Amnezia VPN Panel - Consolidated PostgreSQL Database Schema
 -- Created dynamically from legacy migrations
 
--- Make built-in casts from integer/smallint to boolean implicit for MySQL compatibility
-UPDATE pg_cast SET castcontext = 'i' WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-UPDATE pg_cast SET castcontext = 'i' WHERE castsource = 'smallint'::regtype AND casttarget = 'boolean'::regtype;
+-- Create implicit casts from integer/smallint to boolean for MySQL compatibility
+CREATE OR REPLACE FUNCTION integer_to_boolean(i integer)
+RETURNS boolean AS $$
+    SELECT i <> 0;
+$$ LANGUAGE sql IMMUTABLE STRICT;
+
+DROP CAST IF EXISTS (integer AS boolean);
+CREATE CAST (integer AS boolean) WITH FUNCTION integer_to_boolean(integer) AS IMPLICIT;
+
+CREATE OR REPLACE FUNCTION smallint_to_boolean(s smallint)
+RETURNS boolean AS $$
+    SELECT s <> 0;
+$$ LANGUAGE sql IMMUTABLE STRICT;
+
+DROP CAST IF EXISTS (smallint AS boolean);
+CREATE CAST (smallint AS boolean) WITH FUNCTION smallint_to_boolean(smallint) AS IMPLICIT;
 
 -- Disable foreign key checks is not directly supported in Postgres, but we create tables in order.
 
@@ -309,7 +322,7 @@ INSERT INTO schema_migrations (filename, checksum) VALUES ('001_init.sql', 'base
 
 -- Insert default admin user
 INSERT INTO users (email, password_hash, name, role, status) 
-VALUES ('admin@amnez.ia', '$2y$10$SKEI6ogiWr2gsSG/nELLp.JcfpGhxsDLAAI7gdtTOI3ELz4zJzzPG', 'Administrator', 'admin', 'active') ON CONFLICT DO NOTHING;
+VALUES ('admin@amnez.ia', '$2y$10$SKEI6ogiWr2gsSG/nELLp.JcfpGhxsDLAAI7gdtTOI3ELz4zJzzPG', 'Administrator', 'admin', 'active');
 
 -- Insert supported languages
 INSERT INTO languages (code, name, native_name) VALUES
@@ -447,7 +460,7 @@ INSERT INTO schema_migrations (filename, checksum) VALUES ('011_add_ldap_configs
 
 -- Insert default LDAP configuration (disabled by default)
 INSERT INTO ldap_configs (id, enabled, host, port, base_dn, bind_dn, bind_password) 
-VALUES (1, FALSE, 'ldap.example.com', 389, 'dc=example,dc=com', 'cn=admin,dc=example,dc=com', '') ON CONFLICT DO NOTHING;
+VALUES (1, FALSE, 'ldap.example.com', 389, 'dc=example,dc=com', 'cn=admin,dc=example,dc=com', '');
 
 INSERT INTO schema_migrations (filename, checksum) VALUES ('012_add_user_roles.sql', 'baseline') ON CONFLICT (filename) DO NOTHING;
 
@@ -455,13 +468,13 @@ INSERT INTO schema_migrations (filename, checksum) VALUES ('012_add_user_roles.s
 INSERT INTO user_roles (name, display_name, description, permissions) VALUES
 ('admin', 'Administrator', 'Full access to all features', json_build_array('*')),
 ('manager', 'Manager', 'Can manage servers and clients', json_build_array('servers.view', 'servers.create', 'servers.edit', 'clients.view', 'clients.create', 'clients.edit', 'clients.delete')),
-('viewer', 'Viewer', 'Can only view own clients', json_build_array('clients.view_own', 'clients.download_own')) ON CONFLICT DO NOTHING;
+('viewer', 'Viewer', 'Can only view own clients', json_build_array('clients.view_own', 'clients.download_own'));
 
 -- Insert default LDAP group mappings (examples)
 INSERT INTO ldap_group_mappings (ldap_group, role_name, description) VALUES
 ('vpn-admins', 'admin', 'VPN administrators with full access'),
 ('vpn-managers', 'manager', 'VPN managers who can create and manage clients'),
-('vpn-users', 'viewer', 'Regular VPN users with view-only access') ON CONFLICT DO NOTHING;
+('vpn-users', 'viewer', 'Regular VPN users with view-only access');
 
 INSERT INTO schema_migrations (filename, checksum) VALUES ('013_add_ldap_translations.sql', 'baseline') ON CONFLICT (filename) DO NOTHING;
 
@@ -492,7 +505,7 @@ INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'ldap', 'group_mappings', 'LDAP Group Mappings'),
 ('en', 'ldap', 'group', 'LDAP Group'),
 ('en', 'ldap', 'role', 'Panel Role'),
-('en', 'ldap', 'description', 'Description') ON CONFLICT DO NOTHING;
+('en', 'ldap', 'description', 'Description');
 
 -- Russian translations
 INSERT INTO translations (locale, category, key_name, translation) VALUES
@@ -518,14 +531,14 @@ INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('ru', 'ldap', 'group_mappings', 'Связи групп LDAP'),
 ('ru', 'ldap', 'group', 'Группа LDAP'),
 ('ru', 'ldap', 'role', 'Роль в панели'),
-('ru', 'ldap', 'description', 'Описание') ON CONFLICT DO NOTHING;
+('ru', 'ldap', 'description', 'Описание');
 
 -- Common translations for buttons
 INSERT INTO translations (locale, category, key_name, translation) VALUES
 ('en', 'common', 'save', 'Save'),
 ('en', 'common', 'cancel', 'Cancel'),
 ('ru', 'common', 'save', 'Сохранить'),
-('ru', 'common', 'cancel', 'Отмена') ON CONFLICT DO NOTHING;
+('ru', 'common', 'cancel', 'Отмена');
 
 INSERT INTO schema_migrations (filename, checksum) VALUES ('014_consolidated.sql', 'baseline') ON CONFLICT (filename) DO NOTHING;
 
@@ -1285,7 +1298,7 @@ INSERT INTO protocols (slug, name, description, definition, show_text_content, i
 ('wireguard', 'WireGuard', 'Standard WireGuard', '{}', 0, 1),
 ('openvpn', 'OpenVPN', 'Standard OpenVPN', '{}', 0, 1),
 ('shadowsocks', 'Shadowsocks', 'Shadowsocks proxy', '{}', 0, 1),
-('cloak', 'Cloak', 'Cloak obfuscation', '{}', 0, 1) ON CONFLICT DO NOTHING;
+('cloak', 'Cloak', 'Cloak obfuscation', '{}', 0, 1);
 
 INSERT INTO schema_migrations (filename, checksum) VALUES ('048_enable_xray_stats.sql', 'baseline') ON CONFLICT (filename) DO NOTHING;
 
