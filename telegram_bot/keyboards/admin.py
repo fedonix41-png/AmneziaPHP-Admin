@@ -71,6 +71,8 @@ def client_action_kb(client_id: int, status: str) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="📊 Лимит", callback_data=f"admin:client:limit:{cid}"),
     ])
     rows.append([InlineKeyboardButton(text="🗑 Удалить", callback_data=f"admin:client:delete:{cid}")])
+    rows.append([InlineKeyboardButton(text="📱 Показать QR", callback_data=f"admin:client:qr:{cid}")])
+    rows.append([InlineKeyboardButton(text="📄 Показать конфиг", callback_data=f"admin:client:config:{cid}")])
     rows.append([InlineKeyboardButton(text="🔙 К списку клиентов", callback_data="admin:clients:manage")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

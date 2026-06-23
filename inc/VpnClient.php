@@ -243,6 +243,18 @@ class VpnClient
                 }
             }
 
+            // Also create fully lowercase keys for templates that use {{jc}}, {{jmin}}, etc.
+            foreach (['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4', 'i1', 'i2', 'i3', 'i4', 'i5'] as $lk) {
+                if (!isset($vars[$lk])) {
+                    $mk = ucfirst($lk); // e.g. 'jc' → 'Jc'
+                    if (isset($vars[$mk])) {
+                        $vars[$lk] = (string) $vars[$mk];
+                    } elseif (isset($vars[strtoupper($lk)])) {
+                        $vars[$lk] = (string) $vars[strtoupper($lk)];
+                    }
+                }
+            }
+
             // Generate config from template
             if ($protoRow && !empty($protoRow['output_template'])) {
                 require_once __DIR__ . '/ProtocolService.php';
@@ -1944,6 +1956,18 @@ class VpnClient
         foreach (['S1', 'S2', 'S3', 'S4', 'H1', 'H2', 'H3', 'H4', 'I1', 'I2', 'I3', 'I4', 'I5'] as $key) {
             if (!isset($vars[$key]) && isset($vars[strtoupper($key)])) {
                 $vars[$key] = (string) $vars[strtoupper($key)];
+            }
+        }
+
+        // Also create fully lowercase keys for templates that use {{jc}}, {{jmin}}, etc.
+        foreach (['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4', 'i1', 'i2', 'i3', 'i4', 'i5'] as $lk) {
+            if (!isset($vars[$lk])) {
+                $mk = ucfirst($lk);
+                if (isset($vars[$mk])) {
+                    $vars[$lk] = (string) $vars[$mk];
+                } elseif (isset($vars[strtoupper($lk)])) {
+                    $vars[$lk] = (string) $vars[strtoupper($lk)];
+                }
             }
         }
 

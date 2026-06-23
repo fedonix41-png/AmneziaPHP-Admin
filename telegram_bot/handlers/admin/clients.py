@@ -192,6 +192,67 @@ async def cb_admin_traffic(callback: CallbackQuery) -> None:
     await _refresh_client_view(callback, client_id)
 
 
+@router.callback_query(lambda cb: cb.data.startswith("admin:client:qr:"))
+async def cb_admin_client_qr(callback: CallbackQuery) -> None:
+    from config import settings as bot_settings
+    try:
+        client_id = int(callback.data.rsplit(":", 1)[1])
+    except (IndexError, ValueError):
+        await callback.answer("⚠ Ошибка", show_alert=True)
+        return
+
+    await callback.answer()
+    try:
+        details = await panel_api.client_details(bot_settings.panel_api_token, client_id)
+    except PanelAPIError as exc:
+        await callback.answer(f"⚠ {exc.message}", show_alert=True)
+        return
+
+    qr_b64 = details.get("qr_code", "")
+    if not qr_b64:
+        await callback.answer("⚠ QR-код недоступен", show_alert=True)
+        return
+
+    try:
+        raw = _b64_to_bytes(qr_b64)
+        name = details.get("name") or f"client_{client_id}"
+        await callback.message.answer_photo(
+            BufferedInputFile(raw, filename=f"qr_{client_id}.png"),
+            caption=f"📱 QR-код для «{name}»",
+        )
+    except Exception:
+        await callback.answer("⚠ Не удалось отправить QR-код", show_alert=True)
+
+
+@router.callback_query(lambda cb: cb.data.startswith("admin:client:config:"))
+async def cb_admin_client_config(callback: CallbackQuery) -> None:
+    from config import settings as bot_settings
+    try:
+        client_id = int(callback.data.rsplit(":", 1)[1])
+    except (IndexError, ValueError):
+        await callback.answer("⚠ Ошибка", show_alert=True)
+        return
+
+    await callback.answer()
+    try:
+        details = await panel_api.client_details(bot_settings.panel_api_token, client_id)
+    except PanelAPIError as exc:
+        await callback.answer(f"⚠ {exc.message}", show_alert=True)
+        return
+
+    config_text = details.get("config", "")
+    if not config_text:
+        await callback.answer("⚠ Файл конфигурации недоступен", show_alert=True)
+        return
+
+    name = details.get("name") or f"client_{client_id}"
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(name))
+    await callback.message.answer_document(
+        BufferedInputFile(config_text.encode("utf-8"), filename=f"{safe_name}.conf"),
+        caption=f"📄 Файл конфигурации для «{name}»",
+    )
+
+
 async def _refresh_client_view(callback: CallbackQuery, client_id: int) -> None:
     from config import settings as bot_settings
     try:

@@ -676,15 +676,15 @@ Endpoint = {{server_host}}:{{server_port}}
 AllowedIPs = 0.0.0.0/0
 PersistentKeepalive = 25
 
-Jc = {{jc}}
-Jmin = {{jmin}}
-Jmax = {{jmax}}
-S1 = {{s1}}
-S2 = {{s2}}
-H1 = {{h1}}
-H2 = {{h2}}
-H3 = {{h3}}
-H4 = {{h4}}', true, true
+Jc = {{Jc}}
+Jmin = {{Jmin}}
+Jmax = {{Jmax}}
+S1 = {{S1}}
+S2 = {{S2}}
+H1 = {{H1}}
+H2 = {{H2}}
+H3 = {{H3}}
+H4 = {{H4}}', true, true
 WHERE NOT EXISTS (SELECT 1 FROM protocols WHERE slug='amnezia-wg-advanced');
 
 INSERT INTO protocols (name, slug, description, install_script, output_template, ubuntu_compatible, is_active) 
@@ -790,15 +790,15 @@ Endpoint = {{server_host}}:{{server_port}}
 AllowedIPs = 0.0.0.0/0
 PersistentKeepalive = 25
 
-Jc = {{jc}}
-Jmin = {{jmin}}
-Jmax = {{jmax}}
-S1 = {{s1}}
-S2 = {{s2}}
-H1 = {{h1}}
-H2 = {{h2}}
-H3 = {{h3}}
-H4 = {{h4}}', true
+Jc = {{Jc}}
+Jmin = {{Jmin}}
+Jmax = {{Jmax}}
+S1 = {{S1}}
+S2 = {{S2}}
+H1 = {{H1}}
+H2 = {{H2}}
+H3 = {{H3}}
+H4 = {{H4}}', true
 FROM protocols p WHERE p.slug='amnezia-wg-advanced' AND NOT EXISTS (SELECT 1 FROM protocol_templates WHERE protocol_id=p.id AND template_name='Default AmneziaWG');
 
 INSERT INTO protocol_templates (protocol_id, template_name, template_content, is_default)
