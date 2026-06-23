@@ -1,54 +1,56 @@
 # Database Migrations
 
-This directory contains SQL migration files that are automatically executed when the database container is first initialized.
+Migration files are **PostgreSQL** SQL scripts applied by `update.sh` using `psql`.
 
-## Execution Order
+## Execution
 
-Migration files are executed in **alphabetical order** by MySQL's Docker entrypoint. Files are numbered to ensure correct execution sequence:
+Migrations run in **numerical order** (sorted by filename).
+`update.sh` tracks applied migrations in the `schema_migrations` table (database `amnezia_panel`):
 
-1. `001_init.sql` - Main database schema and tables
-2. `002_translations_ru.sql` - Russian translations
-3. `003_translations_es.sql` - Spanish translations
-4. `004_translations_de.sql` - German translations
-5. `005_translations_fr.sql` - French translations
-6. `006_translations_zh.sql` - Chinese translations
+```sql
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    id SERIAL PRIMARY KEY,
+    filename VARCHAR(255) UNIQUE NOT NULL,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    checksum VARCHAR(64)
+);
+```
 
-## Adding New Migrations
+Each migration runs exactly once (skip if `filename` already recorded).
 
-When creating new migration files:
+## Migration files
 
-1. Use numerical prefix (e.g., `007_add_feature.sql`)
-2. Ensure the number is higher than existing migrations
-3. Use descriptive names
-4. Always use `ON DUPLICATE KEY UPDATE` for INSERT statements to make migrations idempotent
+Files are numbered `000_*` through `070_*`, written in **PostgreSQL syntax**:
 
-## Manual Execution
+- `SERIAL` / `BIGSERIAL` for auto-increment
+- `ON CONFLICT ... DO UPDATE` for upserts (instead of `ON DUPLICATE KEY UPDATE`)
+- `ADD COLUMN IF NOT EXISTS` for safe alterations
+- `DO $$ ... END $$` blocks for procedural logic
+- `CREATE INDEX IF NOT EXISTS` for idempotent index creation
 
-To manually run migrations in an existing database:
+## Adding new migrations
+
+1. Choose next available number (e.g., `071_add_feature.sql`)
+2. Write the migration in PostgreSQL dialect
+3. Use `IF NOT EXISTS` / `ON CONFLICT` to make it idempotent
+4. Run `./update.sh` to apply
+
+## Manual execution
 
 ```bash
 # Single migration
-docker compose exec db mysql -uroot -prootpassword amnezia_panel < migrations/001_init.sql
+docker compose exec -T db sh -c "PGPASSWORD='$DB_PASSWORD' psql -U amnezia -d amnezia_panel" < migrations/000_create_user.sql
 
-# All migrations in order
-for file in migrations/*.sql; do
-  echo "Executing $file..."
-  docker compose exec -T db mysql -uroot -prootpassword amnezia_panel < "$file"
-done
+# All pending migrations
+./update.sh
 ```
 
-## Regenerating Translation Migrations
+## Database initialisation
 
-To regenerate translation migrations from the current database:
+On **first** container start, PostgreSQL entrypoint scripts in `docker-entrypoint-initdb.d/` create both databases:
 
-```bash
-# Export translations for a specific language
-docker compose exec -T db mysql -uroot -prootpassword amnezia_panel \
-  --default-character-set=utf8mb4 \
-  -e "SELECT CONCAT('(''', language_code, ''', ''', translation_key, ''', ''', 
-      REPLACE(translation_value, '''', ''''''), '''),') 
-      FROM translations WHERE language_code = 'ru' ORDER BY translation_key;" \
-  | grep -v "CONCAT" > /tmp/translations_ru.sql
+1. `01-init-multiple-databases.sh` — creates `amnezia_panel` and `telegram_bot`
+2. `02-baseline-schema.sql` — full schema + seeds for `amnezia_panel`
+3. `03-telegram-bot-schema.sql` — schema for `telegram_bot`
 
-# Then wrap with INSERT statement and ON DUPLICATE KEY UPDATE
-```
+These init scripts only run on an empty data volume. For subsequent updates, use `./update.sh`.

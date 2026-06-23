@@ -4,7 +4,6 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from aiogram import Bot
 from aiogram.fsm.state import State
 from aiogram.fsm.storage.base import BaseStorage, StorageKey
 
@@ -24,7 +23,7 @@ def _state_value(state: Optional[str | State]) -> Optional[str]:
 class PostgresStorage(BaseStorage):
     """FSM storage backed by the `fsm_states` table in the telegram_bot DB."""
 
-    async def get_state(self, bot: Bot, key: StorageKey) -> Optional[str]:
+    async def get_state(self, key: StorageKey) -> Optional[str]:
         pool = get_pool()
         row = await pool.fetchrow(
             "SELECT state FROM fsm_states WHERE chat_id = $1 AND user_id = $2",
@@ -33,7 +32,7 @@ class PostgresStorage(BaseStorage):
         )
         return row["state"] if row else None
 
-    async def get_data(self, bot: Bot, key: StorageKey) -> Dict[str, Any]:
+    async def get_data(self, key: StorageKey) -> Dict[str, Any]:
         pool = get_pool()
         row = await pool.fetchrow(
             "SELECT data FROM fsm_states WHERE chat_id = $1 AND user_id = $2",
@@ -49,7 +48,7 @@ class PostgresStorage(BaseStorage):
             return dict(raw)
         return {}
 
-    async def set_state(self, bot: Bot, key: StorageKey, state: Optional[str | State] = None) -> None:
+    async def set_state(self, key: StorageKey, state: Optional[str | State] = None) -> None:
         value = _state_value(state)
         pool = get_pool()
         await pool.execute(
@@ -64,7 +63,7 @@ class PostgresStorage(BaseStorage):
             value,
         )
 
-    async def set_data(self, bot: Bot, key: StorageKey, data: Dict[str, Any]) -> None:
+    async def set_data(self, key: StorageKey, data: Dict[str, Any]) -> None:
         payload = json.dumps(data, ensure_ascii=False, default=str)
         pool = get_pool()
         await pool.execute(
@@ -79,10 +78,10 @@ class PostgresStorage(BaseStorage):
             payload,
         )
 
-    async def update_data(self, bot: Bot, key: StorageKey, data: Dict[str, Any]) -> Dict[str, Any]:
-        current = await self.get_data(bot, key)
+    async def update_data(self, key: StorageKey, data: Dict[str, Any]) -> Dict[str, Any]:
+        current = await self.get_data(key)
         current.update(data)
-        await self.set_data(bot, key, current)
+        await self.set_data(key, current)
         return current
 
     async def close(self) -> None:

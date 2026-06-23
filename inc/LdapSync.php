@@ -26,10 +26,11 @@ class LdapSync
     {
         $db = DB::conn();
         
-        // Check if ldap_configs table exists
+        // Check if ldap_configs table exists (PostgreSQL-compatible)
         try {
-            $stmt = $db->query("SHOW TABLES LIKE 'ldap_configs'");
-            if (!$stmt->fetch()) {
+            $stmt = $db->query("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ldap_configs')");
+            $exists = $stmt->fetchColumn();
+            if (!$exists) {
                 // Table doesn't exist yet - use empty config
                 $this->config = [];
                 return;

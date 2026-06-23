@@ -1,72 +1,130 @@
 # Setup & Deployment
 
-## Development Setup
+## Prerequisites
 
-### Local Development (without Docker)
+- Docker & docker-compose (recommended)
+- Or: PHP 8.2+, PostgreSQL 15, Composer (local dev)
 
-1. **Install PHP 8.2+**
+---
+
+## Docker Development (Recommended)
+
+```bash
+git clone <repo-url> amneziavpnphp
+cd amneziavpnphp
+cp .env.example .env
+# Edit .env — set passwords, bot token (optional)
+docker compose up -d
+```
+
+Access web panel: `http://localhost:8082`
+Default admin: `admin@amnez.ia` / `admin123`
+
+### Running services
+
+| Service | URL / Access | Notes |
+|---------|-------------|-------|
+| Web Panel | `http://localhost:8082` | PHP 8.2 + Apache |
+| PostgreSQL | `localhost:5432` | Databases: `amnezia_panel`, `telegram_bot` |
+| Docker-in-Docker | `tcp://dind:2375` | For deploying VPN containers |
+| Telegram Bot | polling (default) or webhook on `:8080` | Set `BOT_TOKEN` in `.env` |
+
+### Live code editing
+
+The `web` container mounts the project directory:
+```yaml
+volumes:
+  - ./:/var/www/html:z
+```
+
+PHP and template changes take effect immediately. No rebuild needed.
+
+The `telegram_bot` container requires rebuild after Python changes:
+```bash
+docker compose build telegram_bot && docker compose up -d telegram_bot
+```
+
+> [!NOTE]
+> On SELinux-enabled distributions (Fedora, CentOS, RHEL), the `:z` flag
+> auto-labels files for container access. Without it, Apache may return 403 errors.
+
+---
+
+## Local Development (without Docker)
+
+### 1. Install PHP 8.2+
+
 ```bash
 # Ubuntu/Debian
-sudo apt install php8.2 php8.2-cli php8.2-mysql php8.2-gd php8.2-curl php8.2-mbstring
+sudo apt install php8.2 php8.2-cli php8.2-pgsql php8.2-gd \
+  php8.2-curl php8.2-mbstring php8.2-ldap php8.2-bcmath
 
-# macOS (Homebrew)
+# macOS
 brew install php@8.2
 ```
 
-2. **Install MySQL 8.0**
+### 2. Install PostgreSQL 15
+
 ```bash
 # Ubuntu/Debian
-sudo apt install mysql-server-8.0
+sudo apt install postgresql-15
 
 # macOS
-brew install mysql@8.0
+brew install postgresql@15
+brew services start postgresql@15
 ```
 
-3. **Install Composer**
+### 3. Install Composer
+
 ```bash
 curl -sS https://getcomposer.org/installer | php
 sudo mv composer.phar /usr/local/bin/composer
 ```
 
-4. **Clone and Setup**
+### 4. Clone and install dependencies
+
 ```bash
-git clone <repo-url>
-cd amnezia-web-panel
+git clone <repo-url> amneziavpnphp
+cd amneziavpnphp
+cp .env.example .env
+# Edit .env — set DB_HOST=127.0.0.1 for local
 composer install
 ```
 
-5. **Configure Database**
+### 5. Create databases
+
 ```bash
-mysql -u root -p
+sudo -u postgres psql
 
-CREATE DATABASE amnezia_panel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'amnezia'@'localhost' IDENTIFIED BY 'amnezia123';
-GRANT ALL PRIVILEGES ON amnezia_panel.* TO 'amnezia'@'localhost';
-FLUSH PRIVILEGES;
-
-USE amnezia_panel;
-SOURCE migrations/001_init.sql;
-SOURCE migrations/002_translations_ru.sql;
-SOURCE migrations/003_translations_es.sql;
-SOURCE migrations/004_translations_de.sql;
-SOURCE migrations/005_translations_fr.sql;
-SOURCE migrations/006_translations_zh.sql;
+CREATE DATABASE amnezia_panel;
+CREATE DATABASE telegram_bot;
+CREATE USER amnezia WITH PASSWORD 'amnezia';
+GRANT ALL PRIVILEGES ON DATABASE amnezia_panel TO amnezia;
+GRANT ALL PRIVILEGES ON DATABASE telegram_bot TO amnezia;
+\q
 ```
 
-6. **Update Database Config**
+### 6. Configure `.env`
 
-Edit `inc/DB.php`:
-```php
-private static $config = [
-    'host' => 'localhost',  // Change from 'db'
-    'dbname' => 'amnezia_panel',
-    'user' => 'amnezia',
-    'password' => 'amnezia123',
-    'charset' => 'utf8mb4',
-];
+Set `DB_HOST=127.0.0.1` (instead of `db` — the Docker service name):
+
+```env
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=amnezia_panel
+DB_USERNAME=amnezia
+DB_PASSWORD=amnezia
 ```
 
-7. **Run Development Server**
+### 7. Apply schema
+
+```bash
+psql -U amnezia -d amnezia_panel -f docker-entrypoint-initdb.d/02-baseline-schema.sql
+psql -U amnezia -d telegram_bot -f docker-entrypoint-initdb.d/03-telegram-bot-schema.sql
+```
+
+### 8. Run development server
+
 ```bash
 cd public
 php -S localhost:8000
@@ -74,50 +132,71 @@ php -S localhost:8000
 
 Access: `http://localhost:8000`
 
-### Docker Development (Recommended)
+---
 
-```bash
-docker compose up -d
-```
+## Production Deployment
 
-Access: `http://localhost:8082`
+### Checklist
 
-**Live code editing**: Mount project as volume (already configured in docker-compose.yml).
-> [!NOTE]
-> On Linux distributions with SELinux enabled (e.g., Fedora, CentOS, RHEL), the volume mounts in `docker-compose.yml` use the `:z` / `:ro,z` flag to automatically label the files and directories on the host with container-compatible security contexts. This prevents "403 Forbidden" errors where the containerized Apache server cannot read `.htaccess` or other source files.
-
-## Deployment
-
-### Production Checklist
-
-- [ ] Change default admin password
-- [ ] Update database passwords in docker-compose.yml
+- [ ] Change default admin password (`admin@amnez.ia`)
+- [ ] Generate strong `DB_PASSWORD` and `JWT_SECRET`
 - [ ] Set up HTTPS (nginx reverse proxy + Let's Encrypt)
-- [ ] Disable error display
-- [ ] Enable error logging
-- [ ] Set up automated backups
-- [ ] Configure firewall
-- [ ] Set up monitoring
-- [ ] Review security settings
-- [ ] Test disaster recovery
+- [ ] Disable PHP error display (`APP_ENV=production`)
+- [ ] Configure firewall (block direct DB port 5432)
+- [ ] Set up automated backups (pg_dump via cron)
+- [ ] Register `BOT_TOKEN` with @BotFather (if using Telegram bot)
+- [ ] Set `BOT_ADMIN_TELEGRAM_IDS` in `.env`
 
 ### Environment Variables
 
-Create `.env.production`:
+Copy `.env.example` to `.env` and fill in:
+
 ```env
+APP_ENV=production
+DEFAULT_LOCALE=en
+
 DB_HOST=db
-DB_NAME=amnezia_panel
-DB_USER=amnezia
-DB_PASS=strong_random_password_here
-JWT_SECRET=another_strong_random_secret_here
+DB_PORT=5432
+DB_DATABASE=amnezia_panel
+DB_USERNAME=amnezia
+DB_PASSWORD=<strong_random_password>
+DB_ROOT_PASSWORD=<strong_random_password>
+
+JWT_SECRET=<random_64_char_secret>
 ADMIN_EMAIL=admin@yourdomain.com
+ADMIN_PASSWORD=<strong_random_password>
+
+# Telegram Bot (optional)
+BOT_TOKEN=<from_botfather>
+BOT_ADMIN_TELEGRAM_IDS=<comma_separated_ids>
+PANEL_API_URL=http://web:80
+PANEL_API_TOKEN=<api_token>
 ```
 
-Load in PHP:
-```php
-$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
-$dotenv->load();
+### Apply updates
 
-$dbPassword = $_ENV['DB_PASS'];
+```bash
+./update.sh
 ```
 
+This script pulls latest code, runs `composer install`, applies pending migrations via `psql`, and restarts containers.
+
+---
+
+## Environment variable reference
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APP_ENV` | `local` | `local` or `production` |
+| `DB_HOST` | `db` | PostgreSQL host (use `127.0.0.1` for local) |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_DATABASE` | `amnezia_panel` | Web panel database |
+| `DB_USERNAME` | `amnezia` | Database user |
+| `DB_PASSWORD` | — | Database password |
+| `JWT_SECRET` | — | JWT signing secret (64 chars) |
+| `ADMIN_EMAIL` | `admin@amnez.ia` | Default admin email |
+| `ADMIN_PASSWORD` | `admin123` | Default admin password |
+| `BOT_TOKEN` | — | Telegram bot token from @BotFather |
+| `BOT_ADMIN_TELEGRAM_IDS` | — | Comma-separated admin Telegram IDs |
+| `PANEL_API_URL` | `http://web:80` | Web panel URL for bot API calls |
+| `PANEL_API_TOKEN` | — | Permanent API token for bot |

@@ -309,7 +309,7 @@ Closes #123
 ## Resources
 
 - [PHP Documentation](https://www.php.net/docs.php)
-- [MySQL Reference](https://dev.mysql.com/doc/)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [Twig Documentation](https://twig.symfony.com/doc/)
 - [Tailwind CSS](https://tailwindcss.com/docs)
 - [Docker Documentation](https://docs.docker.com/)
