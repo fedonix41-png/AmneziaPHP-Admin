@@ -59,6 +59,29 @@ services:
     volumes:
       - dind_data:/var/lib/docker
 
+  telegram_bot:
+    build:
+      context: ./telegram_bot
+      dockerfile: Dockerfile
+    container_name: amnezia-panel-telegram-bot
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      TG_DB_HOST: db
+      TG_DB_PORT: 5432
+      TG_DB_NAME: telegram_bot
+      TG_DB_USER: ${DB_USERNAME:-amnezia}
+      TG_DB_PASSWORD: ${DB_PASSWORD:-amnezia}
+      PANEL_API_URL: ${PANEL_API_URL:-http://web:80}
+    ports:
+      - "${BOT_WEBHOOK_PORT:-8080}:${BOT_WEBHOOK_PORT:-8080}"
+
 volumes:
   pg_data:
   dind_data:
