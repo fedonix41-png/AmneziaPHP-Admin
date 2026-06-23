@@ -1892,7 +1892,7 @@ Router::get('/api/servers', function () {
     if (!$user)
         return;
 
-    $servers = VpnServer::listByUser($user['id']);
+    $servers = ($user['role'] ?? '') === 'admin' ? VpnServer::listAll() : VpnServer::listByUser($user['id']);
 
     // Enrich with installed protocols
     $pdo = DB::conn();
@@ -2003,7 +2003,7 @@ Router::post('/api/servers/{id}/import', function ($params) {
         echo json_encode(['error' => 'Server not found']);
         return;
     }
-    if ($serverData['user_id'] != $user['id']) {
+    if ($serverData['user_id'] != $user['id'] && ($user['role'] ?? '') !== 'admin') {
         http_response_code(403);
         echo json_encode(['error' => 'Forbidden']);
         return;
@@ -2067,7 +2067,7 @@ Router::get('/api/servers/{id}/imports', function ($params) {
         echo json_encode(['error' => 'Server not found']);
         return;
     }
-    if ($serverData['user_id'] != $user['id']) {
+    if ($serverData['user_id'] != $user['id'] && ($user['role'] ?? '') !== 'admin') {
         http_response_code(403);
         echo json_encode(['error' => 'Forbidden']);
         return;
@@ -2236,6 +2236,50 @@ Router::delete('/api/backups/{id}', function ($params) {
     }
 });
 
+// API: Download backup file
+Router::get('/api/backups/{id}/download', function ($params) {
+    $user = requireApiAuth();
+    if (!$user)
+        return;
+
+    $backupId = (int) $params['id'];
+
+    try {
+        $backup = VpnServer::getBackup($backupId);
+
+        if (!$backup) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Backup not found']);
+            return;
+        }
+
+        $server = new VpnServer($backup['server_id']);
+        $serverData = $server->getData();
+
+        if ($serverData['user_id'] != $user['id'] && $user['role'] !== 'admin') {
+            http_response_code(403);
+            echo json_encode(['error' => 'Forbidden']);
+            return;
+        }
+
+        $filePath = $backup['backup_path'];
+        if (!file_exists($filePath)) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Backup file not found on disk']);
+            return;
+        }
+
+        header('Content-Type: application/json');
+        header('Content-Disposition: attachment; filename="' . basename($filePath) . '"');
+        header('Content-Length: ' . filesize($filePath));
+        readfile($filePath);
+    } catch (Exception $e) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+});
+
 // API: List clients
 Router::get('/api/clients', function () {
     header('Content-Type: application/json');
@@ -2244,7 +2288,14 @@ Router::get('/api/clients', function () {
     if (!$user)
         return;
 
-    $clients = VpnClient::listByUser($user['id']);
+    // Admins see clients from all their servers
+    if (($user['role'] ?? '') === 'admin') {
+        $pdo = DB::conn();
+        $stmt = $pdo->query('SELECT vc.*, vs.name as server_name FROM vpn_clients vc JOIN vpn_servers vs ON vs.id = vc.server_id ORDER BY vc.id DESC');
+        $clients = $stmt->fetchAll();
+    } else {
+        $clients = VpnClient::listByUser($user['id']);
+    }
     echo json_encode(['clients' => $clients]);
 });
 
@@ -2262,8 +2313,8 @@ Router::get('/api/clients/{id}/details', function ($params) {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
 
-        // Check ownership
-        if ($clientData['user_id'] != $user['id']) {
+        // Check ownership or admin
+        if ($clientData['user_id'] != $user['id'] && ($user['role'] ?? '') !== 'admin') {
             http_response_code(403);
             echo json_encode(['error' => 'Forbidden']);
             return;
@@ -2277,14 +2328,26 @@ Router::get('/api/clients/{id}/details', function ($params) {
         $clientData = $client->getData();
         $stats = $client->getFormattedStats();
 
+        // Get server name for context
+        $serverName = '';
+        try {
+            $srv = new VpnServer((int)$clientData['server_id']);
+            $serverName = $srv->getData()['name'] ?? '';
+        } catch (Exception $e) {
+            // ignore
+        }
+
         echo json_encode([
             'success' => true,
             'client' => [
                 'id' => $clientData['id'],
                 'name' => $clientData['name'],
                 'server_id' => $clientData['server_id'],
+                'server_name' => $serverName,
                 'client_ip' => $clientData['client_ip'],
                 'status' => $clientData['status'],
+                'expires_at' => $clientData['expires_at'] ?? null,
+                'traffic_limit' => $clientData['traffic_limit'] ?? null,
                 'created_at' => $clientData['created_at'],
                 'stats' => $stats,
                 'bytes_sent' => $clientData['bytes_sent'],
@@ -2314,8 +2377,8 @@ Router::get('/api/clients/{id}/qr', function ($params) {
         $client = new VpnClient($clientId);
         $clientData = $client->getData();
 
-        // Check ownership
-        if ($clientData['user_id'] != $user['id']) {
+        // Check ownership or admin
+        if ($clientData['user_id'] != $user['id'] && ($user['role'] ?? '') !== 'admin') {
             http_response_code(403);
             echo json_encode(['error' => 'Forbidden']);
             return;

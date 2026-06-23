@@ -107,17 +107,15 @@ iptables -t nat -D POSTROUTING -s 10.0.0.0/24 -o eth0 -j MASQUERADE 2>/dev/null 
 echo "{\"success\":true,\"message\":\"AIVPN uninstalled\"}"',
   'aivpn://{{connection_key}}',
   1,
-  1,
-  1,
-  JSON_OBJECT(
+  true,
+  true,
+  JSON_BUILD_OBJECT(
     'engine', 'shell',
-    'metadata', JSON_OBJECT(
-      'container_name', 'aivpn-server',
-      'port_range', JSON_ARRAY(443, 443),
-      'config_dir', '/etc/aivpn',
-      'vpn_subnet', '10.0.0.0/24',
-      'requires_docker_build', true,
-      'git_repo', 'https://github.com/infosave2007/aivpn.git'
+    'metadata', JSON_BUILD_OBJECT(
+      'container_name', 'amnezia-aivpn',
+      'vpn_subnet', '10.8.4.0/24',
+      'port_range', JSON_BUILD_ARRAY(443, 443),
+      'config_dir', '/opt/amnezia/aivpn'
     )
   ),
   NOW(),

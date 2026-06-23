@@ -64,6 +64,10 @@ class InstallProtocolManager
 
     public static function getDefaultSlug(): string
     {
+        $active = self::listActive();
+        if (!empty($active)) {
+            return $active[0]['slug'];
+        }
         return self::DEFAULT_SLUG;
     }
 
@@ -76,7 +80,7 @@ class InstallProtocolManager
     {
         try {
             $pdo = DB::conn();
-            $stmt = $pdo->query('SELECT * FROM protocols WHERE is_active = 1 ORDER BY name');
+            $stmt = $pdo->query('SELECT * FROM protocols WHERE is_active = true ORDER BY name');
             $rows = $stmt->fetchAll();
             return array_map([self::class, 'hydrateProtocol'], $rows);
         } catch (Throwable $e) {
@@ -1321,7 +1325,7 @@ class InstallProtocolManager
                         'port_range' => [30000, 65000],
                     ],
                 ],
-                'is_active' => 1,
+                'is_active' => true,
             ]
         ];
     }

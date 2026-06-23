@@ -61,13 +61,13 @@ rm -rf /opt/amnezia/mtproxy 2>/dev/null || true
 echo "{\"success\":true,\"message\":\"MTProxy uninstalled\"}"',
   'tg://proxy?server={{server_host}}&port={{server_port}}&secret={{secret}}',
   1,
-  1,
-  1,
-  JSON_OBJECT(
+  true,
+  true,
+  JSON_BUILD_OBJECT(
     'engine', 'shell',
-    'metadata', JSON_OBJECT(
+    'metadata', JSON_BUILD_OBJECT(
       'container_name', 'amnezia-mtproxy',
-      'port_range', JSON_ARRAY(30000, 65000),
+      'port_range', JSON_BUILD_ARRAY(30000, 65000),
       'config_dir', '/opt/amnezia/mtproxy'
     )
   ),

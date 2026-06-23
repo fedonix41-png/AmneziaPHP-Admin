@@ -158,14 +158,14 @@ rm -rf /opt/amnezia/awg2 2>/dev/null || true
 
 echo "{\"success\":true,\"message\":\"AmneziaWG 2.0 uninstalled\"}"',
   p.output_template,
-  1,
-  1,
-  JSON_OBJECT(
+  true,
+  true,
+  JSON_BUILD_OBJECT(
     'engine', 'shell',
-    'metadata', JSON_OBJECT(
+    'metadata', JSON_BUILD_OBJECT(
       'container_name', 'amnezia-awg2',
       'vpn_subnet', '10.8.1.0/24',
-      'port_range', JSON_ARRAY(30000, 65000),
+      'port_range', JSON_BUILD_ARRAY(30000, 65000),
       'config_dir', '/opt/amnezia/awg2'
     )
   ),

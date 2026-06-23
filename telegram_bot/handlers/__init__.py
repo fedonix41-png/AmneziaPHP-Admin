@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from aiogram import Router
 
+from handlers.admin import build_admin_router
 from handlers.auth import router as auth_router
 from handlers.client.ai_assist import router as ai_router
 from handlers.client.config import router as config_router
@@ -18,4 +19,5 @@ def build_router() -> Router:
     router.include_router(stats_router)
     router.include_router(config_router)
     router.include_router(ai_router)
+    router.include_router(build_admin_router())
     return router

@@ -13,7 +13,7 @@ from config import settings
 from db.pool import close_db, init_db
 from db.storage import PostgresStorage
 from handlers import build_router
-from middlewares.access import AccessLogMiddleware
+from middlewares.access import AccessLogMiddleware, AdminGuardMiddleware
 from services.panel_api import panel_api
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,8 @@ def build_dispatcher() -> Dispatcher:
     storage = PostgresStorage()
     dp = Dispatcher(storage=storage)
     dp.include_router(build_router())
+    dp.message.middleware(AdminGuardMiddleware())
+    dp.callback_query.middleware(AdminGuardMiddleware())
     dp.message.middleware(AccessLogMiddleware())
     dp.callback_query.middleware(AccessLogMiddleware())
     dp.startup.register(_on_startup)

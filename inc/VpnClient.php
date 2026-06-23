@@ -2532,9 +2532,9 @@ class VpnClient
             JOIN vpn_servers s ON c.server_id = s.id
             JOIN users u ON c.user_id = u.id
             WHERE c.expires_at IS NOT NULL 
-            AND c.expires_at <= DATE_ADD(NOW(), INTERVAL ? DAY)
+            AND c.expires_at <= NOW() + (?::int * INTERVAL \'1 day\')
             AND c.expires_at > NOW()
-            AND c.status = "active"
+            AND c.status = \'active\'
             ORDER BY c.expires_at ASC
         ');
         $stmt->execute([$days]);
@@ -2555,7 +2555,7 @@ class VpnClient
             JOIN vpn_servers s ON c.server_id = s.id
             WHERE c.expires_at IS NOT NULL 
             AND c.expires_at <= NOW()
-            AND c.status = "active"
+            AND c.status = \'active\'
             ORDER BY c.expires_at DESC
         ');
         return $stmt->fetchAll();
@@ -2647,7 +2647,7 @@ class VpnClient
             return 0;
         }
 
-        return (int) ($this->data['traffic_sent'] ?? 0) + (int) ($this->data['traffic_received'] ?? 0);
+        return (int) ($this->data['bytes_sent'] ?? 0) + (int) ($this->data['bytes_received'] ?? 0);
     }
 
     /**
@@ -2694,11 +2694,11 @@ class VpnClient
     {
         $pdo = DB::conn();
         $stmt = $pdo->query('
-            SELECT id, name, traffic_sent, traffic_received, traffic_limit 
+            SELECT id, name, bytes_sent, bytes_received, traffic_limit 
             FROM vpn_clients 
             WHERE traffic_limit IS NOT NULL 
-            AND (traffic_sent + traffic_received) >= traffic_limit 
-            AND status = "active"
+            AND (bytes_sent + bytes_received) >= traffic_limit 
+            AND status = \'active\'
             ORDER BY id
         ');
 

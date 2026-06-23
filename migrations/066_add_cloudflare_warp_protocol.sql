@@ -188,17 +188,14 @@ WARP IP: {{warp_ip}}
 Mode: {{warp_mode}}
 Server: {{server_host}}',
   1,
-  1,
-  1,
-  JSON_OBJECT(
+  true,
+  true,
+  JSON_BUILD_OBJECT(
     'engine', 'shell',
-    'metadata', JSON_OBJECT(
-      'container_name', '',
-      'port_range', JSON_ARRAY(40000, 40000),
-      'config_dir', '/var/lib/cloudflare-warp',
-      'is_proxy_layer', true,
-      'proxy_port', 40000,
-      'proxy_protocol', 'socks5'
+    'metadata', JSON_BUILD_OBJECT(
+      'container_name', 'amnezia-warp',
+      'port_range', JSON_BUILD_ARRAY(40000, 40000),
+      'config_dir', '/opt/amnezia/warp'
     )
   ),
   NOW(),

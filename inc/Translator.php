@@ -27,7 +27,7 @@ class Translator {
      */
     private static function loadSupportedLanguages(): void {
         $pdo = DB::conn();
-        $stmt = $pdo->query('SELECT code, name, native_name FROM languages WHERE is_active = 1');
+        $stmt = $pdo->query('SELECT code, name, native_name FROM languages WHERE is_active = true');
         self::$supportedLanguages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -229,7 +229,7 @@ class Translator {
     private static function getOpenRouterKey(): ?string {
         try {
             $pdo = DB::conn();
-            $stmt = $pdo->prepare("SELECT api_key FROM api_keys WHERE service_name = 'openrouter' AND is_active = 1 LIMIT 1");
+            $stmt = $pdo->prepare("SELECT api_key FROM api_keys WHERE service_name = 'openrouter' AND is_active = true LIMIT 1");
             $stmt->execute();
             return $stmt->fetchColumn() ?: null;
         } catch (Exception $e) {
@@ -522,7 +522,7 @@ class Translator {
                 (SELECT COUNT(*) FROM translations WHERE locale = 'en') as total_count
             FROM languages l
             LEFT JOIN translations t ON l.code = t.locale
-            WHERE l.is_active = 1
+            WHERE l.is_active = true
             GROUP BY l.code, l.name, l.native_name
         ");
         
@@ -611,7 +611,7 @@ class Translator {
     public static function getApiKey(string $serviceName): ?string {
         try {
             $pdo = DB::conn();
-            $stmt = $pdo->prepare("SELECT api_key FROM api_keys WHERE service_name = ? AND is_active = 1 LIMIT 1");
+            $stmt = $pdo->prepare("SELECT api_key FROM api_keys WHERE service_name = ? AND is_active = true LIMIT 1");
             $stmt->execute([$serviceName]);
             return $stmt->fetchColumn() ?: null;
         } catch (Exception $e) {

@@ -290,11 +290,11 @@ class ProtocolService
             $totalProtocols = (int) $stmt->fetchColumn();
 
             // Active protocols
-            $stmt = $pdo->query('SELECT COUNT(*) FROM protocols WHERE is_active = 1');
+            $stmt = $pdo->query('SELECT COUNT(*) FROM protocols WHERE is_active = true');
             $activeProtocols = (int) $stmt->fetchColumn();
 
             // Ubuntu compatible protocols
-            $stmt = $pdo->query('SELECT COUNT(*) FROM protocols WHERE ubuntu_compatible = 1');
+            $stmt = $pdo->query('SELECT COUNT(*) FROM protocols WHERE ubuntu_compatible = true');
             $ubuntuCompatibleProtocols = (int) $stmt->fetchColumn();
 
             // Protocols with AI generations
@@ -381,7 +381,7 @@ class ProtocolService
             $stmt = $pdo->query('
                 SELECT COUNT(*) 
                 FROM ai_generations 
-                WHERE ubuntu_compatible = 1
+                WHERE ubuntu_compatible = true
             ');
             $ubuntuCompatibleGenerations = (int) $stmt->fetchColumn();
 
