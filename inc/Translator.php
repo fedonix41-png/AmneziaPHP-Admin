@@ -80,7 +80,7 @@ class Translator {
      */
     private static function loadTranslations(string $languageCode): void {
         $pdo = DB::conn();
-        $stmt = $pdo->prepare('SELECT CONCAT(category, ".", key_name) as trans_key, translation FROM translations WHERE locale = ?');
+        $stmt = $pdo->prepare("SELECT CONCAT(category, '.', key_name) as trans_key, translation FROM translations WHERE locale = ?");
         $stmt->execute([$languageCode]);
         
         $translations = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -186,7 +186,7 @@ class Translator {
             $stmt = $pdo->prepare('
                 INSERT INTO translations (locale, category, key_name, translation)
                 VALUES (?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE translation = VALUES(translation)
+                ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation
             ');
             
             return $stmt->execute([$targetLang, $category, $keyName, $translatedText]);
@@ -542,7 +542,7 @@ class Translator {
         $stmt = $pdo->prepare('
             INSERT INTO translations (locale, category, key_name, translation)
             VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE translation = VALUES(translation)
+            ON CONFLICT (locale, category, key_name) DO UPDATE SET translation = EXCLUDED.translation
         ');
         
         return $stmt->execute([$languageCode, $category, $keyName, $value]);
@@ -553,7 +553,7 @@ class Translator {
      */
     public static function exportToJson(string $languageCode): string {
         $pdo = DB::conn();
-        $stmt = $pdo->prepare('SELECT CONCAT(category, ".", key_name) as trans_key, translation FROM translations WHERE locale = ?');
+        $stmt = $pdo->prepare("SELECT CONCAT(category, '.', key_name) as trans_key, translation FROM translations WHERE locale = ?");
         $stmt->execute([$languageCode]);
         
         $translations = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -596,7 +596,7 @@ class Translator {
             $stmt = $pdo->prepare('
                 INSERT INTO api_keys (service_name, api_key, is_active)
                 VALUES (?, ?, 1)
-                ON DUPLICATE KEY UPDATE api_key = VALUES(api_key), updated_at = NOW()
+                ON CONFLICT (service_name) DO UPDATE SET api_key = EXCLUDED.api_key, updated_at = CURRENT_TIMESTAMP
             ');
             return $stmt->execute([$serviceName, $apiKey]);
         } catch (Exception $e) {

@@ -107,14 +107,22 @@ class Auth {
 
   public static function saveSetting(?int $userId, string $namespace, string $key, string $valueJson): bool {
     $pdo = DB::conn();
-    $stmt = $pdo->prepare('INSERT INTO settings (user_id, namespace, `key`, `value`) VALUES (?, ?, ?, CAST(? AS JSON))
-                           ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), updated_at = NOW()');
-    return $stmt->execute([$userId, $namespace, $key, $valueJson]);
+    if ($userId === null) {
+      $stmt = $pdo->prepare('INSERT INTO settings (user_id, namespace, "key", "value") VALUES (NULL, ?, ?, CAST(? AS JSON))
+                             ON CONFLICT (namespace, "key") WHERE user_id IS NULL
+                             DO UPDATE SET "value" = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP');
+      return $stmt->execute([$namespace, $key, $valueJson]);
+    } else {
+      $stmt = $pdo->prepare('INSERT INTO settings (user_id, namespace, "key", "value") VALUES (?, ?, ?, CAST(? AS JSON))
+                             ON CONFLICT (user_id, namespace, "key") WHERE user_id IS NOT NULL
+                             DO UPDATE SET "value" = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP');
+      return $stmt->execute([$userId, $namespace, $key, $valueJson]);
+    }
   }
 
   public static function getSetting(?int $userId, string $namespace, string $key): array {
     $pdo = DB::conn();
-    $stmt = $pdo->prepare('SELECT `value` FROM settings WHERE user_id <=> ? AND namespace = ? AND `key` = ? LIMIT 1');
+    $stmt = $pdo->prepare('SELECT "value" FROM settings WHERE user_id IS NOT DISTINCT FROM ? AND namespace = ? AND "key" = ? LIMIT 1');
     $stmt->execute([$userId, $namespace, $key]);
     $val = $stmt->fetchColumn();
     if (!$val) return [];

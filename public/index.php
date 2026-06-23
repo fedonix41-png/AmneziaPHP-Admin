@@ -273,7 +273,7 @@ Router::get('/dashboard', function () {
     $stmt = $pdo->query("
         SELECT COUNT(*) as cnt FROM vpn_clients 
         WHERE last_handshake IS NOT NULL 
-        AND last_handshake > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+        AND last_handshake > NOW() - INTERVAL '5 minutes'
         AND status = 'active'
     ");
     $recentHandshakeCount = (int) $stmt->fetchColumn();

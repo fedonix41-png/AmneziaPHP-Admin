@@ -196,7 +196,7 @@ if [ $ROLLBACK_MODE -eq 1 ]; then
     mkdir -p "$ROLLBACK_BACKUP_DIR"
     
     log_info "Creating safety backup before rollback..."
-    if $DOCKER_COMPOSE exec -T db mysqldump -uroot -p"$DB_ROOT_PASS" --single-transaction --quick "$DB_NAME" > "$ROLLBACK_BACKUP_DIR/db_backup.sql" 2>>"$LOG_FILE"; then
+    if $DOCKER_COMPOSE exec -T db sh -c "PGPASSWORD='$DB_PASS' pg_dump -U '$DB_USER' -d '$DB_NAME'" > "$ROLLBACK_BACKUP_DIR/db_backup.sql" 2>>"$LOG_FILE"; then
         log_success "Safety backup created"
     else
         log_warning "Failed to create safety backup, continuing anyway..."
@@ -204,7 +204,7 @@ if [ $ROLLBACK_MODE -eq 1 ]; then
     
     # Restore database
     log_info "Restoring database from: $DB_BACKUP_FILE"
-    if cat "$DB_BACKUP_FILE" | $DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" 2>>"$LOG_FILE"; then
+    if cat "$DB_BACKUP_FILE" | $DOCKER_COMPOSE exec -T db sh -c "PGPASSWORD='$DB_PASS' psql -U '$DB_USER' -d '$DB_NAME'" 2>>"$LOG_FILE"; then
         log_success "Database restored"
     else
         error_exit "Failed to restore database"
@@ -260,7 +260,7 @@ if [ $ROLLBACK_MODE -eq 1 ]; then
     
     MAX_TRIES=30
     COUNTER=0
-    until $DOCKER_COMPOSE exec -T db mysqladmin ping -h localhost -uroot -p"$DB_ROOT_PASS" &>/dev/null; do
+    until $DOCKER_COMPOSE exec -T db pg_isready -U "$DB_USER" -d "$DB_NAME" &>/dev/null; do
         COUNTER=$((COUNTER + 1))
         if [ $COUNTER -gt $MAX_TRIES ]; then
             error_exit "Database did not become ready in time"
@@ -388,7 +388,7 @@ log_info "DB container: $DB_STATUS"
 log_info "Waiting for database to be ready..."
 MAX_TRIES=30
 COUNTER=0
-until $DOCKER_COMPOSE exec -T db mysqladmin ping -h localhost -uroot -p"$DB_ROOT_PASS" &>/dev/null; do
+until $DOCKER_COMPOSE exec -T db pg_isready -U "$DB_USER" -d "$DB_NAME" &>/dev/null; do
     COUNTER=$((COUNTER + 1))
     if [ $COUNTER -gt $MAX_TRIES ]; then
         error_exit "Database did not become ready in time"
@@ -414,7 +414,7 @@ if [ $SKIP_BACKUP -eq 0 ]; then
     log_info "Backing up database..."
     DB_BACKUP_FILE="$BACKUP_DIR/db_backup_$TIMESTAMP.sql"
     
-    if $DOCKER_COMPOSE exec -T db mysqldump -uroot -p"$DB_ROOT_PASS" --single-transaction --quick "$DB_NAME" > "$DB_BACKUP_FILE" 2>>"$LOG_FILE"; then
+    if $DOCKER_COMPOSE exec -T db sh -c "PGPASSWORD='$DB_PASS' pg_dump -U '$DB_USER' -d '$DB_NAME'" > "$DB_BACKUP_FILE" 2>>"$LOG_FILE"; then
         BACKUP_SIZE=$(du -h "$DB_BACKUP_FILE" | cut -f1)
         log_success "Database backup created: $DB_BACKUP_FILE ($BACKUP_SIZE)"
     else
@@ -547,36 +547,13 @@ if [ -z "$MIGRATIONS" ]; then
 else
     # Create migrations tracking table
     log_info "Ensuring migrations table exists..."
-    $DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" <<EOF 2>>"$LOG_FILE"
+    $DOCKER_COMPOSE exec -T db sh -c "PGPASSWORD='$DB_PASS' psql -U '$DB_USER' -d '$DB_NAME' -c \"
 CREATE TABLE IF NOT EXISTS schema_migrations (
-    id INT PRIMARY KEY AUTO_INCREMENT,
+    id SERIAL PRIMARY KEY,
     filename VARCHAR(255) UNIQUE NOT NULL,
     applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    checksum VARCHAR(64),
-    INDEX idx_filename (filename)
-);
-EOF
-    
-    # Detect legacy installs missing baseline migration records
-    LEGACY_BASELINE_CHECK=$($DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM schema_migrations WHERE filename = '010_add_monitoring_translations.sql';" 2>/dev/null || echo "0")
-    if [ "$LEGACY_BASELINE_CHECK" = "0" ]; then
-        HAS_TRANSLATIONS_LOCALE=$($DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'translations' AND COLUMN_NAME = 'locale';" 2>/dev/null || echo "0")
-        HAS_TRANSLATIONS_LANGUAGE_CODE=$($DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'translations' AND COLUMN_NAME = 'language_code';" 2>/dev/null || echo "0")
-        if [ "$HAS_TRANSLATIONS_LOCALE" != "0" ] && [ "$HAS_TRANSLATIONS_LANGUAGE_CODE" = "0" ]; then
-            log_warning "Detected legacy install without migration records. Seeding baseline entries..."
-            $DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" -e "INSERT IGNORE INTO schema_migrations (filename) VALUES \
-            ('000_create_user.sql'),('001_init.sql'),('002_translations_ru.sql'),('003_translations_es.sql'),('004_translations_de.sql'),('005_translations_fr.sql'),('006_translations_zh.sql'),('007_add_traffic_limit.sql'),('008_add_panel_imports.sql'),('009_add_server_metrics.sql'),('010_add_monitoring_translations.sql');" 2>>"$LOG_FILE" || true
-            $DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" -e "INSERT IGNORE INTO user_roles (name, display_name, description, permissions) VALUES \
-            ('admin','Administrator','Full access to all features', JSON_ARRAY('*')),\
-            ('manager','Manager','Can manage servers and clients', JSON_ARRAY('servers.view','servers.create','servers.edit','clients.view','clients.create','clients.edit','clients.delete')),\
-            ('viewer','Viewer','Can only view own clients', JSON_ARRAY('clients.view_own','clients.download_own'));" 2>>"$LOG_FILE" || true
-            $DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" -e "INSERT IGNORE INTO ldap_group_mappings (ldap_group, role_name, description) VALUES \
-            ('vpn-admins','admin','VPN administrators with full access'),\
-            ('vpn-managers','manager','VPN managers who can create and manage clients'),\
-            ('vpn-users','viewer','Regular VPN users with view-only access');" 2>>"$LOG_FILE" || true
-            log_success "Baseline migration entries seeded"
-        fi
-    fi
+    checksum VARCHAR(64)
+);\"" 2>>"$LOG_FILE"
 
     # Apply each migration
     APPLIED_COUNT=0
@@ -586,31 +563,31 @@ EOF
         FILENAME=$(basename "$migration")
         
         # Check if already applied
-        ALREADY_APPLIED=$($DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM schema_migrations WHERE filename = '$FILENAME';" 2>/dev/null || echo "0")
+        ALREADY_APPLIED=$($DOCKER_COMPOSE exec -T db sh -c "PGPASSWORD='$DB_PASS' psql -U '$DB_USER' -d '$DB_NAME' -t -A -c \"SELECT COUNT(*) FROM schema_migrations WHERE filename = '$FILENAME';\"" 2>/dev/null || echo "0")
         
         if [ "$ALREADY_APPLIED" = "0" ]; then
             log_info "Applying: $FILENAME"
             
             # Apply migration
-            if cat "$migration" | $DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" 2>>"$LOG_FILE"; then
+            if cat "$migration" | $DOCKER_COMPOSE exec -T db sh -c "PGPASSWORD='$DB_PASS' psql -U '$DB_USER' -d '$DB_NAME'" 2>>"$LOG_FILE"; then
                 # Calculate checksum
                 CHECKSUM=$(sha256sum "$migration" | cut -d' ' -f1)
                 
                 # Mark as applied
-                $DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" -e "INSERT INTO schema_migrations (filename, checksum) VALUES ('$FILENAME', '$CHECKSUM');" 2>>"$LOG_FILE"
+                $DOCKER_COMPOSE exec -T db sh -c "PGPASSWORD='$DB_PASS' psql -U '$DB_USER' -d '$DB_NAME' -c \"INSERT INTO schema_migrations (filename, checksum) VALUES ('$FILENAME', '$CHECKSUM');\"" 2>>"$LOG_FILE"
                 
                 log_success "Applied: $FILENAME"
                 APPLIED_COUNT=$((APPLIED_COUNT + 1))
             else
-                # Check error log for "already exists" errors (idempotent migrations)
-                LAST_ERROR=$(tail -30 "$LOG_FILE" | grep -i "ERROR.*already exists\|ERROR.*Duplicate\|ERROR.*Table.*already" || echo "")
+                # Check error log for duplicate/already exists errors (idempotent migrations)
+                LAST_ERROR=$(tail -30 "$LOG_FILE" | grep -i "already exists\|duplicate key\|already" || echo "")
                 
                 if [ -n "$LAST_ERROR" ]; then
-                    log_warning "Migration $FILENAME skipped (tables already exist)"
+                    log_warning "Migration $FILENAME skipped (already exists)"
                     
                     # Mark as applied to prevent re-running
                     CHECKSUM=$(sha256sum "$migration" | cut -d' ' -f1)
-                    $DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p"$DB_ROOT_PASS" "$DB_NAME" -e "INSERT IGNORE INTO schema_migrations (filename, checksum) VALUES ('$FILENAME', '$CHECKSUM');" 2>>"$LOG_FILE"
+                    $DOCKER_COMPOSE exec -T db sh -c "PGPASSWORD='$DB_PASS' psql -U '$DB_USER' -d '$DB_NAME' -c \"INSERT INTO schema_migrations (filename, checksum) VALUES ('$FILENAME', '$CHECKSUM') ON CONFLICT (filename) DO NOTHING;\"" 2>>"$LOG_FILE"
                     SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
                 else
                     log_error "Failed to apply: $FILENAME"
@@ -670,7 +647,7 @@ if [ $DOCKERFILE_CHANGED -eq 1 ]; then
     # Wait for database
     MAX_TRIES=30
     COUNTER=0
-    until $DOCKER_COMPOSE exec -T db mysqladmin ping -h localhost -uroot -p"$DB_ROOT_PASS" &>/dev/null; do
+    until $DOCKER_COMPOSE exec -T db pg_isready -U "$DB_USER" -d "$DB_NAME" &>/dev/null; do
         COUNTER=$((COUNTER + 1))
         if [ $COUNTER -gt $MAX_TRIES ]; then
             log_warning "Database took longer than expected to start"
@@ -771,7 +748,7 @@ if [ $SKIP_BACKUP -eq 0 ]; then
     log "  $0 --rollback"
     log "  or manually:"
     log "  1. $DOCKER_COMPOSE down"
-    log "  2. cat $BACKUP_DIR/db_backup_$TIMESTAMP.sql | $DOCKER_COMPOSE exec -T db mysql --default-character-set=utf8mb4 -uroot -p\$DB_ROOT_PASS $DB_NAME"
+    log "  2. cat $BACKUP_DIR/db_backup_$TIMESTAMP.sql | $DOCKER_COMPOSE exec -T db sh -c \"PGPASSWORD='\$DB_PASS' psql -U '\$DB_USER' -d $DB_NAME\""
     log "  3. git reset --hard $CURRENT_COMMIT"
     log "  4. $DOCKER_COMPOSE up -d"
     log ""

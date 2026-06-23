@@ -27,7 +27,7 @@ class JWT {
         
         // Unified schema: settings(namespace='security', key='jwt_secret', JSON value)
         $pdo = DB::conn();
-        $stmt = $pdo->prepare('SELECT value FROM settings WHERE namespace = ? AND `key` = ? LIMIT 1');
+        $stmt = $pdo->prepare('SELECT "value" FROM settings WHERE namespace = ? AND "key" = ? LIMIT 1');
         $stmt->execute(['security', 'jwt_secret']);
         $result = $stmt->fetch();
         
@@ -42,7 +42,9 @@ class JWT {
         
         // If no secret exists, generate and save using the unified schema
         $newKey = bin2hex(random_bytes(32));
-        $stmt = $pdo->prepare('INSERT INTO settings (user_id, namespace, `key`, value) VALUES (NULL, ?, ?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)');
+        $stmt = $pdo->prepare('INSERT INTO settings (user_id, namespace, "key", "value") VALUES (NULL, ?, ?, ?)
+                               ON CONFLICT (namespace, "key") WHERE user_id IS NULL
+                               DO UPDATE SET "value" = EXCLUDED.value');
         $stmt->execute(['security', 'jwt_secret', json_encode($newKey)]);
         self::$secretKey = $newKey;
         return self::$secretKey;

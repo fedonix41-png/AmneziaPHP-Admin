@@ -598,8 +598,9 @@ class InstallProtocolManager
             ]);
             $stmt = $pdo->prepare('
                 INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at)
-                VALUES (?, ?, ?, NOW(), NOW())
-                ON DUPLICATE KEY UPDATE config_data = VALUES(config_data), applied_at = NOW()
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT (server_id, protocol_id)
+                DO UPDATE SET config_data = EXCLUDED.config_data, applied_at = CURRENT_TIMESTAMP
             ');
             $stmt->execute([$serverId, $protocolId, $configData]);
         }
@@ -1030,7 +1031,7 @@ class InstallProtocolManager
                         'server_port' => $row['vpn_port'] ?? null,
                         'extras' => $extras
                     ];
-                    $stmt4 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE config_data = VALUES(config_data), applied_at = NOW()');
+                    $stmt4 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (server_id, protocol_id) DO UPDATE SET config_data = EXCLUDED.config_data, applied_at = CURRENT_TIMESTAMP');
                     $stmt4->execute([$serverId, (int) $protocolId, json_encode($config)]);
 
                     // Keep existing MTProxy client links in sync with current runtime port/secret after reinstall.
@@ -1506,7 +1507,7 @@ class InstallProtocolManager
                                 'awg_params' => $details['awg_params'] ?? null,
                             ]
                         ];
-                        $stmt2 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE config_data = VALUES(config_data), applied_at = NOW()');
+                        $stmt2 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (server_id, protocol_id) DO UPDATE SET config_data = EXCLUDED.config_data, applied_at = CURRENT_TIMESTAMP');
                         $stmt2->execute([$serverId, $pid, json_encode($config)]);
                     }
                     return array_merge($restoreResult, ['mode' => 'restore_existing']);
@@ -1593,7 +1594,7 @@ class InstallProtocolManager
                         'server_port' => $resolvedPort,
                         'extras' => $res
                     ];
-                    $stmt2 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE config_data = VALUES(config_data), applied_at = NOW()');
+                    $stmt2 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (server_id, protocol_id) DO UPDATE SET config_data = EXCLUDED.config_data, applied_at = CURRENT_TIMESTAMP');
                     $stmt2->execute([$serverId, $pid, json_encode($config)]);
                 }
                 // Sync existing clients from DB to Container (Restore active clients)
@@ -1718,7 +1719,7 @@ class InstallProtocolManager
                         'reality_server_name' => $res['reality_server_name'] ?? null,
                     ]
                 ];
-                $stmt2 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE config_data = VALUES(config_data), applied_at = NOW()');
+                $stmt2 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (server_id, protocol_id) DO UPDATE SET config_data = EXCLUDED.config_data, applied_at = CURRENT_TIMESTAMP');
                 $stmt2->execute([$serverId, $pid, json_encode($config)]);
             }
             // Save vpn_port to vpn_servers table ONLY for the primary (first) protocol
@@ -2492,7 +2493,7 @@ class InstallProtocolManager
                     'container_name' => $containerName,
                 ]
             ];
-            $stmt2 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE config_data = VALUES(config_data), applied_at = NOW()');
+            $stmt2 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (server_id, protocol_id) DO UPDATE SET config_data = EXCLUDED.config_data, applied_at = CURRENT_TIMESTAMP');
             $stmt2->execute([$serverId, $pid, json_encode($config)]);
         }
 

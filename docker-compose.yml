@@ -1,24 +1,22 @@
 services:
   db:
-    image: mysql:8.0
+    image: postgres:15-alpine
     container_name: amnezia-panel-db
     restart: unless-stopped
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
     env_file:
       - .env
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
-      MYSQL_DATABASE: ${DB_DATABASE:-amnezia_panel}
-      MYSQL_USER: ${DB_USERNAME:-amnezia}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-amnezia}
+      POSTGRES_USER: ${DB_USERNAME:-amnezia}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-amnezia}
+      POSTGRES_DB: ${DB_DATABASE:-amnezia_panel}
+      POSTGRES_MULTIPLE_DATABASES: "amnezia_panel,telegram_bot"
     ports:
-      - "3309:3306"
+      - "5432:5432"
     volumes:
-      - db_data:/var/lib/mysql
-      - ./migrations:/docker-entrypoint-initdb.d:z
-      - ./my.cnf:/etc/mysql/conf.d/my.cnf:ro,z
+      - pg_data:/var/lib/postgresql/data
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:z
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -40,7 +38,7 @@ services:
       APP_ENV: ${APP_ENV:-local}
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-en}
       DB_HOST: db
-      DB_PORT: 3306
+      DB_PORT: 5432
       DB_DATABASE: ${DB_DATABASE:-amnezia_panel}
       DB_USERNAME: ${DB_USERNAME:-amnezia}
       DB_PASSWORD: ${DB_PASSWORD:-amnezia}
@@ -62,5 +60,5 @@ services:
       - dind_data:/var/lib/docker
 
 volumes:
-  db_data:
+  pg_data:
   dind_data:

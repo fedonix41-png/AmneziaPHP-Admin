@@ -464,17 +464,17 @@ class SettingsController {
             INSERT INTO ldap_configs 
             (id, enabled, host, port, use_tls, base_dn, bind_dn, bind_password, user_search_filter, group_search_filter, sync_interval)
             VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-            enabled = VALUES(enabled),
-            host = VALUES(host),
-            port = VALUES(port),
-            use_tls = VALUES(use_tls),
-            base_dn = VALUES(base_dn),
-            bind_dn = VALUES(bind_dn),
-            bind_password = VALUES(bind_password),
-            user_search_filter = VALUES(user_search_filter),
-            group_search_filter = VALUES(group_search_filter),
-            sync_interval = VALUES(sync_interval)
+            ON CONFLICT (id) DO UPDATE SET
+            enabled = EXCLUDED.enabled,
+            host = EXCLUDED.host,
+            port = EXCLUDED.port,
+            use_tls = EXCLUDED.use_tls,
+            base_dn = EXCLUDED.base_dn,
+            bind_dn = EXCLUDED.bind_dn,
+            bind_password = EXCLUDED.bind_password,
+            user_search_filter = EXCLUDED.user_search_filter,
+            group_search_filter = EXCLUDED.group_search_filter,
+            sync_interval = EXCLUDED.sync_interval
         ");
         
         $stmt->execute([

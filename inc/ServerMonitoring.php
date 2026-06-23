@@ -576,7 +576,7 @@ class ServerMonitoring
             SELECT *
             FROM server_metrics
             WHERE server_id = ?
-            AND collected_at >= DATE_SUB(NOW(), INTERVAL ? HOUR)
+            AND collected_at >= NOW() - (? * INTERVAL '1 hour')
             ORDER BY collected_at ASC
         ");
 
@@ -596,7 +596,7 @@ class ServerMonitoring
             SELECT *
             FROM client_metrics
             WHERE client_id = ?
-            AND collected_at >= DATE_SUB(NOW(), INTERVAL ? HOUR)
+            AND collected_at >= NOW() - (? * INTERVAL '1 hour')
             ORDER BY collected_at ASC
         ");
 
@@ -613,10 +613,10 @@ class ServerMonitoring
         $db = DB::conn();
 
         // Clean server metrics
-        $db->exec("DELETE FROM server_metrics WHERE collected_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+        $db->exec("DELETE FROM server_metrics WHERE collected_at < NOW() - INTERVAL '24 hours'");
 
         // Clean client metrics
-        $db->exec("DELETE FROM client_metrics WHERE collected_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+        $db->exec("DELETE FROM client_metrics WHERE collected_at < NOW() - INTERVAL '24 hours'");
     }
 
     /**
@@ -1238,7 +1238,7 @@ class ServerMonitoring
             WHERE vc.server_id = ? 
               AND vc.status = 'active'
               AND vc.last_handshake IS NOT NULL 
-              AND vc.last_handshake >= DATE_SUB(NOW(), INTERVAL 300 SECOND)
+              AND vc.last_handshake >= NOW() - INTERVAL '300 seconds'
               AND (p.slug IS NULL OR p.slug NOT LIKE '%xray%')
         ");
         $stmt->execute([$serverData['id']]);

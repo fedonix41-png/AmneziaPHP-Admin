@@ -306,11 +306,11 @@ class ProtocolService
             $protocolsWithAI = (int) $stmt->fetchColumn();
 
             // Recent AI generations
-            $stmt = $pdo->query('
+            $stmt = $pdo->query("
                 SELECT COUNT(*) 
                 FROM ai_generations 
-                WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-            ');
+                WHERE created_at >= NOW() - INTERVAL '7 days'
+            ");
             $recentAIGenerations = (int) $stmt->fetchColumn();
 
             // Server usage by protocol
@@ -364,7 +364,7 @@ class ProtocolService
             $stmt = $pdo->query('
                 SELECT COUNT(*) 
                 FROM ai_generations 
-                WHERE MONTH(created_at) = MONTH(NOW()) AND YEAR(created_at) = YEAR(NOW())
+                WHERE EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM NOW()) AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW())
             ');
             $thisMonthGenerations = (int) $stmt->fetchColumn();
 

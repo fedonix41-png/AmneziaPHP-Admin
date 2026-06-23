@@ -1,0 +1,195 @@
+# Техническое задание (ТЗ) для AI-агента
+## Telegram-бот и миграция AmneziaPHP-Admin на PostgreSQL
+
+Этот документ описывает технические требования для реализации Telegram-бота и сопутствующей миграции базы данных веб-панели с MySQL на **PostgreSQL**.
+
+---
+
+## 🏗️ 1. Архитектура и контейнеризация (PostgreSQL-centric)
+
+Вместо MySQL проект переводится на единый инстанс **PostgreSQL**, в котором разворачиваются две базы данных (или схемы):
+1. `amnezia_panel` — для веб-панели управления.
+2. `telegram_bot` — для локальных нужд Telegram-бота.
+
+### Схема взаимодействия:
+```mermaid
+flowchart TD
+    TG_User[Пользователь / Админ в TG] <-->|Интерфейс Telegram| TG_Bot[Telegram Bot (aiogram)]
+    TG_Bot <-->|Аутентификация & Настройки| TG_DB[(PostgreSQL: telegram_bot)]
+    TG_Bot <-->|REST API HTTPS| Panel_Web[AmneziaPHP-Admin Web]
+    Panel_Web <-->|Данные панели| Panel_DB[(PostgreSQL: amnezia_panel)]
+    Panel_Web <-->|SSH / Docker API| Servers[VPN-серверы]
+```
+
+---
+
+## 💾 2. План миграции AmneziaPHP-Admin на PostgreSQL
+
+Поскольку панель изначально написана под MySQL, перевод требует адаптации кода и SQL-миграций.
+
+### А. Изменение `docker-compose.yml`
+Удаляется сервис `db` (MySQL 8.0) и добавляется сервис `postgres:15`:
+```yaml
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: amnezia-panel-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-amnezia}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-amnezia}
+      POSTGRES_MULTIPLE_DATABASES: "amnezia_panel,telegram_bot" # Скрипт инициализации создаст две БД
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d # Скрипт автоматического создания баз
+```
+
+### Б. Инициализация нескольких баз данных
+Для автоматического создания баз данных `amnezia_panel` и `telegram_bot` создается файл `docker-entrypoint-initdb.d/init-multiple-databases.sh`:
+```bash
+#!/bin/bash
+set -e
+set -u
+
+function create_user_and_database() {
+	local database=$1
+	echo "  Creating database '$database'"
+	psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+	    CREATE DATABASE $database;
+	    GRANT ALL PRIVILEGES ON DATABASE $database TO $POSTGRES_USER;
+EOSQL
+}
+
+if [ -n "$POSTGRES_MULTIPLE_DATABASES" ]; then
+	echo "Multiple database creation requested: $POSTGRES_MULTIPLE_DATABASES"
+	for db in $(echo $POSTGRES_MULTIPLE_DATABASES | tr ',' ' '); do
+		create_user_and_database $db
+	done
+	echo "Multiple databases created"
+fi
+```
+
+### В. Модификация `inc/DB.php` в панели
+PHP-код подключения переключается на драйвер `pgsql`:
+```php
+$dsn = sprintf('pgsql:host=%s;port=%s;dbname=%s', $host, $port, $db);
+self::$pdo = new PDO($dsn, $user, $pass, $options);
+```
+*(Примечание: Запросы `SET NAMES utf8mb4` и `collation` в MySQL не нужны для PostgreSQL, так как PostgreSQL по умолчанию использует UTF-8 на уровне базы).*
+
+### Г. Адаптация SQL-миграций (`migrations/`)
+Необходимо скорректировать SQL-скрипты под PostgreSQL:
+*   Заменить `AUTO_INCREMENT` на `SERIAL` или `BIGSERIAL`.
+*   Заменить обратные кавычки (`` ` ``) на двойные кавычки (`"`) или полностью удалить их.
+*   Удалить MySQL-специфичные директивы, такие как `ENGINE=InnoDB`, `DEFAULT CHARSET=utf8mb4`, `COLLATE=...`.
+*   Заменить функции вроде `NOW()` / `CURRENT_TIMESTAMP` на аналоги, если синтаксис различается.
+
+---
+
+## 🗄️ 3. База данных Telegram-бота (`telegram_bot`)
+
+Бот использует СУБД PostgreSQL. Структура таблиц:
+
+```sql
+CREATE TABLE users (
+    telegram_id BIGINT PRIMARY KEY,
+    amnezia_client_id VARCHAR(255) NULL,
+    email VARCHAR(255) NULL,
+    role VARCHAR(50) DEFAULT 'user', -- 'user' | 'admin'
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE cached_configs (
+    client_id VARCHAR(255) PRIMARY KEY,
+    config_text TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE payments (
+    payment_id SERIAL PRIMARY KEY,
+    telegram_id BIGINT REFERENCES users(telegram_id),
+    amount NUMERIC(10, 2),
+    currency VARCHAR(10),
+    status VARCHAR(50), -- 'pending', 'completed', 'failed'
+    provider VARCHAR(50), -- 'telegram_invoice', 'yookassa', 'stripe', etc.
+    days_to_extend INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+---
+
+## 💳 4. Реализация системы оплаты (Встроенные и Сторонние провайдеры)
+
+Бот должен поддерживать гибкую систему биллинга.
+
+### А. Встроенные оплаты Telegram (Telegram Invoices)
+Используются для оплаты картами (через Stripe, ЮKassa и др. внутри интерфейса Telegram) или через Telegram Stars:
+1.  **Выставление счета:** Бот отправляет сообщение с методом `sendInvoice`.
+2.  **Проверка возможности оплаты:** Обработка события `pre_checkout_query`. Бот проверяет статус клиента через API панели. Если клиент заблокирован окончательно или удален — отклоняет платеж.
+3.  **Подтверждение оплаты:** После получения события `successful_payment` бот отправляет запрос:
+    *   `POST /api/clients/{client_id}/extend` с параметром `{ "days": X }`.
+    *   Создает запись в таблице `payments` со статусом `completed`.
+    *   Отправляет пользователю сообщение об успешном продлении и обновленный статус подписки.
+
+### Б. Сторонние провайдеры (Внешние ссылки / Webhooks)
+Используются, когда пользователь платит через внешний сайт/эквайринг (например, CryptoPay, QIWI, LAVA):
+1.  **Генерация счета:** Бот делает API-запрос к сторонней кассе, получает ссылку на оплату (`payment_url`) и уникальный `transaction_id`.
+2.  **Запись в БД:** Бот создает в локальной таблице `payments` строку со статусом `pending`.
+3.  **Переход на оплату:** Бот отправляет пользователю инлайн-кнопку со ссылкой на оплату и кнопкой `[🔄 Проверить оплату]`.
+4.  **Обработка Webhook (Рекомендуется):**
+    *   Бот запускает простейший HTTP-сервер (внутри `aiogram` через `aiohttp` на выделенном порту).
+    *   При поступлении Webhook от платежной системы о зачислении средств:
+        *   Находится транзакция в таблице `payments`.
+        *   Выполняется запрос к API панели: `POST /api/clients/{client_id}/extend`.
+        *   Пользователю в Telegram отправляется уведомление об успешной оплате.
+5.  **Ручная проверка (Запасной вариант):** При нажатии кнопки `[Проверить оплату]` бот запрашивает статус транзакции у платежного API и, если она оплачена, производит продление.
+
+---
+
+## 🔔 5. Алгоритм рассылки алертов администраторам
+
+*   Все администраторы хранятся в конфигурации в виде списка `ADMIN_TELEGRAM_IDS` (считывается из `.env`).
+*   При отправке любого критического алерта (перегрузка сервера, превышение лимита трафика) бот совершает прямую рассылку в цикле:
+    ```python
+    async def send_alert_to_admins(bot: Bot, text: str):
+        for admin_id in settings.ADMIN_TELEGRAM_IDS:
+            try:
+                await bot.send_message(chat_id=admin_id, text=text, parse_mode="HTML")
+            except Exception as e:
+                logging.error(f"Не удалось отправить алерт админу {admin_id}: {e}")
+    ```
+*   Для предотвращения блокировок (Rate Limits) при рассылке (в случае большого числа администраторов), интервал между отправками в цикле должен быть не менее 0.05 сек (`asyncio.sleep(0.05)`).
+
+---
+
+## 📋 6. Интерфейс и функции бота
+
+### Функционал пользователя (VPN-клиента):
+*   `Авторизация` по email/паролю веб-панели.
+*   `Получение файлов` настроек (QR-код и `.conf`).
+*   `Статистика`: трафик в реальном времени, лимиты, дата окончания.
+*   `Сброс ключа`: перегенерация конфигурации.
+*   `Продление`: выбор тарифа и оплата (Telegram Invoices / внешняя ссылка).
+*   `AI-ассистент`: решение проблем с подключением на базе ИИ.
+
+### Функционал Администратора:
+*   `Мониторинг`: статус всех серверов, метрики (CPU/RAM/Диск/Сеть), количество клиентов онлайн.
+*   `Управление клиентами`: поиск, блокировка (`revoke`), активация (`restore`), удаление, изменение срока и лимитов трафика.
+*   `Управление серверами`: запуск селф-тестов и диагностики рукопожатий на серверах.
+*   `Бэкап`: инициация создания резервной копии базы данных.
+
+---
+
+## 🧪 7. Чек-лист тестирования (QA)
+*   [ ] База данных PostgreSQL успешно инициализирует схемы `amnezia_panel` and `telegram_bot`.
+*   [ ] Миграции веб-панели проходят без синтаксических ошибок в pgsql-драйвере.
+*   [ ] Бот корректно определяет роли пользователей (админ/клиент).
+*   [ ] При сбросе настроек старый QR/конфиг аннулируется, новый успешно работает.
+*   [ ] При отправке платежа через встроенную форму Telegram Stars или Stripe подписка продлевается автоматически, транзакция фиксируется в БД.
+*   [ ] Внешние вебхуки оплат обрабатываются корректно, бот мгновенно включает доступ и присылает сообщение.
+*   [ ] Алерты о высокой нагрузке CPU (>90%) на сервере доставляются всем администраторам напрямую.
