@@ -2320,34 +2320,13 @@ Router::get('/api/clients/{id}/details', function ($params) {
             return;
         }
 
-        // For WireGuard/AWG clients, regenerate config from current server state
-        // to avoid stale AWG parameters (same as download endpoint).
-        $protocolSlug = '';
-        $protocolId = (int) ($clientData['protocol_id'] ?? 0);
-        if ($protocolId > 0) {
-            try {
-                $pdo = DB::conn();
-                $stmtProto = $pdo->prepare('SELECT slug FROM protocols WHERE id = ? LIMIT 1');
-                $stmtProto->execute([$protocolId]);
-                $protocolSlug = (string) $stmtProto->fetchColumn();
-            } catch (Exception $e) {
-                // ignore
-            }
-        }
-        $isAwg = in_array($protocolSlug, ['amnezia-wg-advanced', 'wireguard-standard', 'amnezia-wg', 'awg2'], true);
-        if ($isAwg) {
-            try {
-                $client->regenerateConfigFromServer(true);
-                $client = new VpnClient($clientId);
-                $clientData = $client->getData();
-            } catch (Throwable $e) {
-                error_log('Failed to regenerate client config in API /details: ' . $e->getMessage());
-            }
-        }
+        // Config is stored in vpn_clients.config and is always current.
+        // SSH regeneration is not needed on every view — use POST /api/clients/{id}/regenerate-config
+        // when fresh server-side config is explicitly requested.
 
-        // Sync live stats from VPN server only when requested.
-        // Pass ?sync=0 to skip SSH and use cached DB values (fast).
-        $shouldSync = ($_GET['sync'] ?? '1') !== '0';
+        // Live stats from VPN server are opt-in (slow, requires SSH).
+        // Pass ?sync=1 to pull fresh traffic data. Defaults to cached DB values.
+        $shouldSync = ($_GET['sync'] ?? '0') === '1';
         if ($shouldSync) {
             $client->syncStats();
             // Reload data after sync

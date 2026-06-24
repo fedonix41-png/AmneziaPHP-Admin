@@ -19,6 +19,7 @@ from keyboards.admin import (
     traffic_limit_presets_kb,
 )
 from services.panel_api import PanelAPIError, panel_api
+from services.users import config_cache
 from states.admin import AddClientStates
 from utils.format import humanize_bytes, humanize_date, status_label
 
@@ -37,6 +38,7 @@ async def _safe_edit(callback: CallbackQuery, text: str, **kwargs) -> bool:
             return False
         raise
 
+
 # ── Client action dispatch ─────────────────────────────────────────
 
 @router.callback_query(lambda cb: cb.data.startswith("admin:client:select:"))
@@ -52,6 +54,7 @@ async def cb_admin_client_select(callback: CallbackQuery) -> None:
     token = bot_settings.panel_api_token
     try:
         details = await panel_api.client_details(token, client_id)
+        await config_cache.save(client_id, details.get("config", ""), details.get("qr_code", ""))
     except PanelAPIError as exc:
         await _safe_edit(callback, f"⚠ {exc.message}", reply_markup=back_to_admin_kb(), parse_mode=None)
         return
@@ -202,26 +205,39 @@ async def cb_admin_client_qr(callback: CallbackQuery) -> None:
         return
 
     await callback.answer()
+
+    cached = await config_cache.get(client_id)
+    if cached and cached.get("qr_code"):
+        raw = _b64_to_bytes(cached["qr_code"])
+        await callback.message.answer_photo(
+            BufferedInputFile(raw, filename=f"qr_{client_id}.png"),
+            caption=f"📱 QR-код клиента #{client_id}",
+        )
+        return
+
+    progress = await callback.message.answer("⏳ Загружаю QR-код…")
     try:
         details = await panel_api.client_details(bot_settings.panel_api_token, client_id)
+        await config_cache.save(client_id, details.get("config", ""), details.get("qr_code", ""))
     except PanelAPIError as exc:
-        await callback.answer(f"⚠ {exc.message}", show_alert=True)
+        await progress.edit_text(f"⚠ {exc.message}")
         return
 
     qr_b64 = details.get("qr_code", "")
     if not qr_b64:
-        await callback.answer("⚠ QR-код недоступен", show_alert=True)
+        await progress.edit_text("⚠ QR-код недоступен")
         return
 
     try:
         raw = _b64_to_bytes(qr_b64)
         name = details.get("name") or f"client_{client_id}"
+        await progress.delete()
         await callback.message.answer_photo(
             BufferedInputFile(raw, filename=f"qr_{client_id}.png"),
             caption=f"📱 QR-код для «{name}»",
         )
     except Exception:
-        await callback.answer("⚠ Не удалось отправить QR-код", show_alert=True)
+        await progress.edit_text("⚠ Не удалось отправить QR-код")
 
 
 @router.callback_query(lambda cb: cb.data.startswith("admin:client:config:"))
@@ -234,19 +250,32 @@ async def cb_admin_client_config(callback: CallbackQuery) -> None:
         return
 
     await callback.answer()
+
+    cached = await config_cache.get(client_id)
+    if cached and cached.get("config"):
+        safe_name = f"client_{client_id}"
+        await callback.message.answer_document(
+            BufferedInputFile(cached["config"].encode("utf-8"), filename=f"{safe_name}.conf"),
+            caption=f"📄 Файл конфигурации клиента #{client_id}",
+        )
+        return
+
+    progress = await callback.message.answer("⏳ Загружаю конфиг…")
     try:
         details = await panel_api.client_details(bot_settings.panel_api_token, client_id)
+        await config_cache.save(client_id, details.get("config", ""), details.get("qr_code", ""))
     except PanelAPIError as exc:
-        await callback.answer(f"⚠ {exc.message}", show_alert=True)
+        await progress.edit_text(f"⚠ {exc.message}")
         return
 
     config_text = details.get("config", "")
     if not config_text:
-        await callback.answer("⚠ Файл конфигурации недоступен", show_alert=True)
+        await progress.edit_text("⚠ Файл конфигурации недоступен")
         return
 
     name = details.get("name") or f"client_{client_id}"
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(name))
+    await progress.delete()
     await callback.message.answer_document(
         BufferedInputFile(config_text.encode("utf-8"), filename=f"{safe_name}.conf"),
         caption=f"📄 Файл конфигурации для «{name}»",
@@ -257,6 +286,7 @@ async def _refresh_client_view(callback: CallbackQuery, client_id: int) -> None:
     from config import settings as bot_settings
     try:
         details = await panel_api.client_details(bot_settings.panel_api_token, client_id)
+        await config_cache.save(client_id, details.get("config", ""), details.get("qr_code", ""))
         name = details.get("name") or f"Клиент #{client_id}"
         ip = details.get("client_ip", "—")
         status = details.get("status", "")
@@ -476,6 +506,9 @@ async def step_add_duration(callback: CallbackQuery, state: FSMContext) -> None:
     config_text = result.get("config", "")
     qr_b64 = result.get("qr_code", "")
     expires = result.get("expires_at")
+
+    if config_text or qr_b64:
+        await config_cache.save(cid, config_text, qr_b64)
 
     lines = [
         f"✅ <b>Клиент создан!</b>",

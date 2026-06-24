@@ -100,3 +100,43 @@ class UsersRepo:
 
 
 users_repo = UsersRepo()
+
+
+class ConfigCacheRepo:
+    """Persistent config/QR cache backed by PostgreSQL cached_configs table."""
+
+    async def get(self, client_id: int) -> dict | None:
+        pool = get_pool()
+        row = await pool.fetchrow(
+            "SELECT config_text, qr_base64 FROM cached_configs WHERE client_id = $1",
+            str(client_id),
+        )
+        if not row:
+            return None
+        return {"config": row["config_text"] or "", "qr_code": row["qr_base64"] or ""}
+
+    async def save(self, client_id: int, config_text: str, qr_base64: str) -> None:
+        pool = get_pool()
+        await pool.execute(
+            """
+            INSERT INTO cached_configs (client_id, config_text, qr_base64, updated_at)
+            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+            ON CONFLICT (client_id) DO UPDATE
+              SET config_text = EXCLUDED.config_text,
+                  qr_base64 = EXCLUDED.qr_base64,
+                  updated_at = CURRENT_TIMESTAMP
+            """,
+            str(client_id),
+            config_text or "",
+            qr_base64 or "",
+        )
+
+    async def delete(self, client_id: int) -> None:
+        pool = get_pool()
+        await pool.execute(
+            "DELETE FROM cached_configs WHERE client_id = $1",
+            str(client_id),
+        )
+
+
+config_cache = ConfigCacheRepo()
