@@ -110,17 +110,17 @@ PRIVATE_KEY=$(docker exec "$CONTAINER_NAME" wg genkey)
 PUBLIC_KEY=$(echo "$PRIVATE_KEY" | docker exec -i "$CONTAINER_NAME" wg pubkey)
 PRESHARED_KEY=$(docker exec "$CONTAINER_NAME" wg genpsk)
 
-JC=5
-JMIN=10
-JMAX=50
-S1_VAL=51
-S2_VAL=125
-S3_VAL=13
-S4_VAL=9
-H1_VAL="1443912531-1981073285"
-H2_VAL="1984025557-2135018048"
-H3_VAL="2145217268-2146643749"
-H4_VAL="2146790761-2146860793"
+JC=$(awk -v seed=$RANDOM 'BEGIN{srand(seed); print int(3+rand()*(10-3+1))}')
+JMIN=$(awk -v seed=$RANDOM 'BEGIN{srand(seed); print int(10+rand()*(50-10+1))}')
+JMAX=$(awk -v seed=$RANDOM -v jmin=$JMIN 'BEGIN{srand(seed); print int(jmin+rand()*(100-jmin+1))}')
+S1_VAL=$(awk -v seed=$RANDOM 'BEGIN{srand(seed); print int(15+rand()*(150-15+1))}')
+S2_VAL=$(awk -v seed=$RANDOM 'BEGIN{srand(seed); print int(15+rand()*(150-15+1))}')
+S3_VAL=$(awk -v seed=$RANDOM 'BEGIN{srand(seed); print int(15+rand()*(150-15+1))}')
+S4_VAL=$(awk -v seed=$RANDOM 'BEGIN{srand(seed); print int(15+rand()*(150-15+1))}')
+H1_VAL=$(awk -v seed=$RANDOM 'BEGIN{srand(seed); print int(1443912531+rand()*(1981073285-1443912531+1))}')
+H2_VAL=$(awk -v seed=$RANDOM 'BEGIN{srand(seed); print int(1984025557+rand()*(2135018048-1984025557+1))}')
+H3_VAL=$(awk -v seed=$RANDOM 'BEGIN{srand(seed); print int(2145217268+rand()*(2146643749-2145217268+1))}')
+H4_VAL=$(awk -v seed=$RANDOM 'BEGIN{srand(seed); print int(2146790761+rand()*(2146860793-2146790761+1))}')
 I1_VAL="<r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>"
 I2_VAL=""
 I3_VAL=""
@@ -210,10 +210,10 @@ SET pv.default_value = CASE pv.variable_name
     WHEN 'S2' THEN '125'
     WHEN 'S3' THEN '13'
     WHEN 'S4' THEN '9'
-    WHEN 'H1' THEN '1443912531-1981073285'
-    WHEN 'H2' THEN '1984025557-2135018048'
-    WHEN 'H3' THEN '2145217268-2146643749'
-    WHEN 'H4' THEN '2146790761-2146860793'
+    WHEN 'H1' THEN '1443912531'
+    WHEN 'H2' THEN '1984025557'
+    WHEN 'H3' THEN '2145217268'
+    WHEN 'H4' THEN '2146790761'
     ELSE pv.default_value
 END
 WHERE p.slug = 'awg2'
@@ -223,5 +223,5 @@ WHERE p.slug = 'awg2'
 -- Problem: H1-H4 parameters were stored with single values instead of "value1-value2" format
 -- This was causing QR codes to be detected as "legacy" instead of proper AmneziaWG 2.0 format
 UPDATE vpn_servers
-SET awg_params = '{"JC":5,"JMIN":10,"JMAX":50,"S1":51,"S2":125,"S3":13,"S4":9,"H1":"1443912531-1981073285","H2":"1984025557-2135018048","H3":"2145217268-2146643749","H4":"2146790761-2146860793","I1":"<r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>","I2":"","I3":"","I4":"","I5":""}'
+SET awg_params = '{"JC":5,"JMIN":10,"JMAX":50,"S1":51,"S2":125,"S3":13,"S4":9,"H1":"1443912531","H2":"1984025557","H3":"2145217268","H4":"2146790761","I1":"<r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>","I2":"","I3":"","I4":"","I5":""}'
 WHERE install_protocol = 'awg2';

@@ -929,17 +929,17 @@ class VpnClient
     {
         if ($protocolSlug === 'awg2') {
             return [
-                'JC' => 5,
-                'JMIN' => 10,
-                'JMAX' => 50,
+                'Jc' => 5,
+                'Jmin' => 10,
+                'Jmax' => 50,
                 'S1' => 51,
                 'S2' => 125,
                 'S3' => 13,
                 'S4' => 9,
-                'H1' => '1443912531-1981073285',
-                'H2' => '1984025557-2135018048',
-                'H3' => '2145217268-2146643749',
-                'H4' => '2146790761-2146860793',
+                'H1' => 1443912531,
+                'H2' => 1984025557,
+                'H3' => 2145217268,
+                'H4' => 2146790761,
                 'I1' => '<r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>',
                 'I2' => '',
                 'I3' => '',
@@ -1096,16 +1096,8 @@ class VpnClient
             $wgOutput = (string) $server->executeCommand($wgShowCmd, true);
             $paramNames = ['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4', 'i1', 'i2', 'i3', 'i4', 'i5'];
             foreach ($paramNames as $param) {
-                // For H1-H4 parameters, expect format like "1443912531-1981073285" (two values with dash)
-                // For other parameters, expect single integer value
-                if (in_array($param, ['h1', 'h2', 'h3', 'h4'], true)) {
-                    if (preg_match('/^\s*' . preg_quote($param, '/') . ':\s*(\d+-\d+)/mi', $wgOutput, $matches)) {
-                        $awgParams[strtoupper($param)] = $matches[1];
-                    }
-                } else {
-                    if (preg_match('/^\s*' . preg_quote($param, '/') . ':\s*(\d+)/mi', $wgOutput, $matches)) {
-                        $awgParams[strtoupper($param)] = (int) $matches[1];
-                    }
+                if (preg_match('/^\s*' . preg_quote($param, '/') . ':\s*(\d+)/mi', $wgOutput, $matches)) {
+                    $awgParams[strtoupper($param)] = (int) $matches[1];
                 }
             }
 
@@ -1246,16 +1238,8 @@ class VpnClient
                 continue;
             }
             
-            // For H1-H4 parameters, only use server value if it has the correct "value1-value2" format
-            if (in_array($upperKey, ['H1', 'H2', 'H3', 'H4'], true)) {
-                if (is_string($value) && preg_match('/^\d+-\d+$/', $value)) {
-                    $finalParams[$upperKey] = $value;
-                }
-                // Otherwise keep the default value
-            } else {
-                // For other parameters, use server value if present
-                $finalParams[$upperKey] = $value;
-            }
+            // Use server value if present
+            $finalParams[$upperKey] = $value;
         }
         
         $config = "[Interface]\n";
