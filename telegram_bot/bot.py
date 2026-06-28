@@ -14,6 +14,7 @@ from db.pool import close_db, init_db
 from db.storage import PostgresStorage
 from handlers import build_router
 from middlewares.access import AccessLogMiddleware, AdminGuardMiddleware
+from services.alerts import alert_scheduler
 from services.panel_api import panel_api
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ def build_dispatcher() -> Dispatcher:
 async def _on_startup(bot: Bot, **kwargs) -> None:
     await init_db()
     await panel_api.start()
+    alert_scheduler.start(bot)
     if settings.bot_use_webhook and settings.bot_webhook_url:
         await bot.set_webhook(
             settings.bot_webhook_url,
@@ -58,6 +60,7 @@ async def _on_shutdown(bot: Bot, **kwargs) -> None:
         await bot.delete_webhook(drop_pending_updates=False)
     except Exception as exc:
         logger.warning("Не удалось снять webhook: %s", exc)
+    await alert_scheduler.stop()
     await panel_api.stop()
     await close_db()
 

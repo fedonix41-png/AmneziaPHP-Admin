@@ -35,6 +35,15 @@ class Settings(BaseSettings):
 
     panel_app_name: str = Field("Amnezia VPN", validation_alias="APP_NAME")
 
+    # ── Proactive alerting (периодический опрос API панели) ──
+    alert_enabled: bool = Field(True, validation_alias="ALERT_ENABLED")
+    alert_cpu_threshold: float = Field(90.0, validation_alias="ALERT_CPU_THRESHOLD")
+    alert_ram_threshold: float = Field(95.0, validation_alias="ALERT_RAM_THRESHOLD")
+    alert_cpu_interval: int = Field(300, validation_alias="ALERT_CPU_INTERVAL")
+    alert_overlimit_interval: int = Field(900, validation_alias="ALERT_OVERLIMIT_INTERVAL")
+    alert_expiring_hour: int = Field(9, validation_alias="ALERT_EXPIRING_HOUR")
+    alert_expiring_days: int = Field(1, validation_alias="ALERT_EXPIRING_DAYS")
+
     @computed_field
     @property
     def admin_ids(self) -> List[int]:
