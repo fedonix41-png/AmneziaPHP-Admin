@@ -82,18 +82,27 @@ if (strlen($name) < 3 || strlen($name) > 50) {
 
 ---
 
-## Known Vulnerabilities (TODO)
+## Resolved vulnerabilities
+
+The following were previously tracked as TODOs and are now implemented.
 
 ### Rate limiting on auth endpoint
-`POST /api/auth/token` не имеет rate limiting — уязвим к brute-force атакам на email/password.
-Необходимо добавить промежуточный слой (например, IP-based throttle с экспоненциальной задержкой).
+`POST /api/auth/token` is protected by IP-based throttling (`inc/RateLimiter.php`).
+Failed attempts are tracked in the `auth_attempts` table (amnezia_panel DB, migration `072_create_auth_attempts.sql`).
+After `AUTH_RATE_LIMIT` failures (default 5) within `AUTH_RATE_WINDOW` seconds (default 60), the IP is locked out with **exponential backoff** (`AUTH_LOCKOUT_BASE`, default 60s, doubling per repeat, capped at 1h). A successful login clears the counter. Locked requests return `429` with a `Retry-After` header.
 
 ### SSH passwords stored in plaintext
-Пароли SSH-доступа к VPN-серверам хранятся в таблице `vpn_servers` открытым текстом (или слабо обфусцированы).
-Необходимо шифрование at rest (например, через `libsodium` с ключом из `.env`).
+SSH passwords are now **encrypted at rest** via libsodium secretbox (`inc/Crypto.php`), keyed by `APP_KEY` from `.env`.
+- Ciphertexts carry an `enc:v1:` prefix; legacy plaintext rows are **transparently re-encrypted on first load** (`VpnServer::load()`), so no separate SQL migration is needed.
+- Decryption happens in `VpnServer::load()`, so all SSH code still sees plaintext via `$this->data['password']`.
+- `/api/servers` no longer returns `password` or `ssh_key` fields (previously leaked via `SELECT *`).
+- WARNING: losing/changing `APP_KEY` renders all SSH passwords undecryptable.
 
 ### JWT secret in database
-JWT signing secret хранится в таблице `settings` базы данных, а не в переменной окружения.
-При утечке БД злоумышленник может подписывать произвольные JWT-токены для любого пользователя.
-Необходимо перенести секрет в `.env` и генерировать через `JWT_SECRET`.
+JWT signing secret is sourced **only** from the `JWT_SECRET` environment variable (`inc/JWT.php`).
+- No database fallback; the legacy `settings.jwt_secret` row is removed by migration `071_remove_jwt_secret_from_settings.sql`.
+- `JWT::ensureSecret()` auto-provisions a strong random secret into `.env` on first run if it is missing, shorter than 32 bytes, or equal to the shipped placeholder.
+
+### Secrets provisioning
+`APP_KEY` and `JWT_SECRET` are auto-generated and persisted to `.env` on first run (`Config::ensureKey()`). They are **never** stored in the database or logged.
 

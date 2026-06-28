@@ -49,6 +49,23 @@ class VpnServer
         if (!$this->data) {
             throw new Exception('Server not found');
         }
+
+        // Decrypt SSH password at rest. Legacy plaintext values are migrated
+        // (re-encrypted) on first access so no separate SQL migration is required.
+        $stored = $this->data['password'] ?? null;
+        if ($stored !== null && $stored !== '') {
+            $plaintext = Crypto::decrypt($stored);
+            if (!Crypto::isEncrypted($stored)) {
+                // Legacy plaintext row — re-encrypt and persist (once).
+                try {
+                    $pdo->prepare('UPDATE vpn_servers SET password = ? WHERE id = ?')
+                        ->execute([Crypto::encrypt($plaintext), $this->serverId]);
+                } catch (Throwable $e) {
+                    error_log('SSH password lazy-encryption failed for server ' . $this->serverId . ': ' . $e->getMessage());
+                }
+            }
+            $this->data['password'] = $plaintext;
+        }
     }
 
     /**
@@ -117,7 +134,7 @@ class VpnServer
             $data['host'],
             $data['port'],
             $data['username'],
-            $data['password'] ?? null,
+            Crypto::encrypt($data['password'] ?? null),
             !empty($data['ssh_key']) ? self::normalizeSshKey($data['ssh_key']) : null,
             $data['container_name'] ?? 'amnezia-awg',
             $protocolSlug,
@@ -177,7 +194,7 @@ class VpnServer
             $host,
             $port,
             $username,
-            $password,
+            Crypto::encrypt($password),
             $containerName,
             $installProtocol,
             $installOptions,
@@ -215,7 +232,9 @@ class VpnServer
             'name' => $mapString($serverData['name'] ?? null),
             'host' => $mapString($serverData['host'] ?? null),
             'username' => $mapString($serverData['ssh_username'] ?? null),
-            'password' => isset($serverData['ssh_password']) ? (string) $serverData['ssh_password'] : null,
+            'password' => isset($serverData['ssh_password']) && $serverData['ssh_password'] !== ''
+                ? Crypto::encrypt((string) $serverData['ssh_password'])
+                : null,
             'container_name' => $mapString($serverData['container_name'] ?? null),
             'vpn_subnet' => $mapString($serverData['vpn_subnet'] ?? null),
             'server_public_key' => $mapString($serverData['server_public_key'] ?? null),
@@ -474,7 +493,8 @@ class VpnServer
         $needsSudo = false;
 
         // Determine auth method
-        $sshOptions = '-o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no';
+        // ConnectTimeout prevents indefinite hangs when the remote host is unreachable.
+        $sshOptions = '-o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10';
         $keyFile = '';
 
         if (!empty($this->data['ssh_key'])) {
@@ -568,7 +588,7 @@ class VpnServer
         $testCmd = 'docker --version 2>&1';
         $pathPrefix = 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH; ';
         
-        $sshOptions = '-o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no';
+        $sshOptions = '-o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10';
         $keyFile = '';
 
         if (!empty($this->data['ssh_key'])) {
@@ -887,20 +907,31 @@ BASH;
      */
     public function delete(): bool
     {
-        // Stop and remove container
+        // Delete from database FIRST so the record is always removed,
+        // even if the remote host is unreachable (avoids zombie entries).
+        $pdo = DB::conn();
+
+        // Cascade-delete related records before removing the server row.
+        $pdo->prepare('DELETE FROM vpn_clients WHERE server_id = ?')->execute([$this->serverId]);
+        $pdo->prepare('DELETE FROM server_protocols WHERE server_id = ?')->execute([$this->serverId]);
+
+        $stmt = $pdo->prepare('DELETE FROM vpn_servers WHERE id = ?');
+        $deleted = $stmt->execute([$this->serverId]);
+
+        // Best-effort: try to stop and remove the Docker container on the remote host.
+        // This runs AFTER the DB deletion so a network timeout cannot block the deletion.
+        // SSH ConnectTimeout=10 is set in executeCommand(), so each call blocks at most ~10 s.
         try {
-            $containerName = $this->data['container_name'];
+            $containerName = $this->data['container_name'] ?? 'amnezia-awg';
             $this->executeCommand("docker stop {$containerName} 2>/dev/null || true", true);
             $this->executeCommand("docker rm -fv {$containerName} 2>/dev/null || true", true);
             $this->executeCommand("rm -rf /opt/amnezia/amnezia-awg", true);
         } catch (Exception $e) {
-            // Ignore errors during cleanup
+            // Remote cleanup failed (server unreachable, auth error, etc.) — log but ignore.
+            error_log('VpnServer::delete() remote cleanup failed for server ' . $this->serverId . ': ' . $e->getMessage());
         }
 
-        // Delete from database
-        $pdo = DB::conn();
-        $stmt = $pdo->prepare('DELETE FROM vpn_servers WHERE id = ?');
-        return $stmt->execute([$this->serverId]);
+        return $deleted;
     }
 
     /**

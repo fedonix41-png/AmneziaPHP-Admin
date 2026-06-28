@@ -24,6 +24,8 @@ require_once __DIR__ . '/../inc/VpnServer.php';
 require_once __DIR__ . '/../inc/VpnClient.php';
 require_once __DIR__ . '/../inc/Translator.php';
 require_once __DIR__ . '/../inc/JWT.php';
+require_once __DIR__ . '/../inc/Crypto.php';
+require_once __DIR__ . '/../inc/RateLimiter.php';
 require_once __DIR__ . '/../inc/PanelImporter.php';
 require_once __DIR__ . '/../inc/ServerMonitoring.php';
 require_once __DIR__ . '/../inc/BackupLibrary.php';
@@ -33,6 +35,20 @@ require_once __DIR__ . '/../inc/OpenRouterService.php';
 
 // Load environment configuration
 Config::load(__DIR__ . '/../.env');
+
+// Ensure JWT signing secret exists in .env (auto-provisioned, never stored in DB)
+try {
+    JWT::ensureSecret();
+} catch (Throwable $e) {
+    error_log('JWT secret bootstrap error: ' . $e->getMessage());
+}
+
+// Ensure APP_KEY exists for at-rest secret encryption (SSH passwords)
+try {
+    Crypto::ensureKey();
+} catch (Throwable $e) {
+    error_log('APP_KEY bootstrap error: ' . $e->getMessage());
+}
 
 // Test database connection
 try {
@@ -1789,6 +1805,19 @@ Router::post('/servers/{id}/sync-stats', function ($params) {
 Router::post('/api/auth/token', function () {
     header('Content-Type: application/json');
 
+    // Brute-force protection (IP-based, exponential backoff)
+    $bucket = 'auth_token';
+    $lockout = RateLimiter::lockoutRemaining($bucket);
+    if ($lockout > 0) {
+        http_response_code(429);
+        header('Retry-After: ' . $lockout);
+        echo json_encode([
+            'error' => 'Too many attempts. Try again in ' . $lockout . 's.',
+            'retry_after' => $lockout,
+        ]);
+        return;
+    }
+
     $email = $_POST['email'] ?? '';
     $password = $_POST['password'] ?? '';
 
@@ -1800,6 +1829,7 @@ Router::post('/api/auth/token', function () {
 
     $user = Auth::getUserByEmail($email);
     if (!$user || !password_verify($password, $user['password_hash'])) {
+        RateLimiter::registerFailure($bucket);
         http_response_code(401);
         echo json_encode(['error' => 'Invalid credentials']);
         return;
@@ -1807,6 +1837,7 @@ Router::post('/api/auth/token', function () {
 
     try {
         $token = JWT::generate($user['id']);
+        RateLimiter::clear($bucket);
         echo json_encode([
             'success' => true,
             'token' => $token,
@@ -1894,9 +1925,10 @@ Router::get('/api/servers', function () {
 
     $servers = ($user['role'] ?? '') === 'admin' ? VpnServer::listAll() : VpnServer::listByUser($user['id']);
 
-    // Enrich with installed protocols
+    // Enrich with installed protocols and strip secrets (passwords/keys are encrypted at rest)
     $pdo = DB::conn();
     foreach ($servers as &$server) {
+        unset($server['password'], $server['ssh_key']);
         $stmt = $pdo->prepare('SELECT p.id, p.slug, p.name FROM server_protocols sp JOIN protocols p ON p.id = sp.protocol_id WHERE sp.server_id = ?');
         $stmt->execute([$server['id']]);
         $server['protocols'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -2269,7 +2301,7 @@ Router::get('/api/backups/{id}/download', function ($params) {
             return;
         }
 
-        header('Content-Type: application/json');
+        header('Content-Type: application/octet-stream');
         header('Content-Disposition: attachment; filename="' . basename($filePath) . '"');
         header('Content-Length: ' . filesize($filePath));
         readfile($filePath);

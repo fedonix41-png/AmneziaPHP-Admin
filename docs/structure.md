@@ -30,7 +30,7 @@ amneziavpnphp/                          # Project root
 │   └── vendor/                        # Installed packages (not in git)
 │
 ├── 💾 Database
-│   └── migrations/                    # 39 PostgreSQL migration files (000–070)
+│   └── migrations/                    # 41 PostgreSQL migration files (000–072)
 │       └── migrations/README.md
 │
 ├── 🌐 Web Application
@@ -40,16 +40,18 @@ amneziavpnphp/                          # Project root
 │   ├── inc/                           # Core PHP library (18 files)
 │   │   ├── Auth.php                   # Session auth, LDAP, registration
 │   │   ├── BackupLibrary.php          # Server backup import/export
-│   │   ├── Config.php                 # .env loader
+│   │   ├── Config.php                 # .env loader + secret provisioning (ensureKey)
+│   │   ├── Crypto.php                 # libsodium at-rest encryption (SSH passwords)
 │   │   ├── DB.php                     # PostgreSQL PDO singleton (pgsql)
 │   │   ├── InstallProtocolManager.php # Protocol lifecycle (install/activate/delete)
-│   │   ├── JWT.php                    # JWT token API auth
+│   │   ├── JWT.php                    # JWT token API auth (env-only secret)
 │   │   ├── LdapSync.php              # LDAP/AD integration
 │   │   ├── Logger.php                 # Logging utility
 │   │   ├── OpenRouterService.php      # AI script generation (OpenRouter API)
 │   │   ├── PanelImporter.php          # Import configs from other panels
 │   │   ├── ProtocolService.php        # Protocol CRUD service
 │   │   ├── QrUtil.php                 # Amnezia-compatible QR encoding
+│   │   ├── RateLimiter.php            # IP-based brute-force protection (auth_attempts)
 │   │   ├── Router.php                 # URL routing
 │   │   ├── ServerMonitoring.php       # Xray API online client tracking
 │   │   ├── Translator.php             # Multi-language translations (en/ru/es/de/fr/zh)
@@ -166,16 +168,18 @@ Migrations in `migrations/` are applied by `update.sh` using `psql`.
 |------|---------|
 | `Auth.php` | Session-based auth, LDAP authentication, registration, role checks |
 | `BackupLibrary.php` | Server backup import/export |
-| `Config.php` | `.env` file parser, environment variable accessor |
+| `Config.php` | `.env` file parser, environment variable accessor, secret provisioning (`ensureKey`) |
+| `Crypto.php` | libsodium symmetric encryption-at-rest for SSH passwords, keyed by `APP_KEY` |
 | `DB.php` | PDO singleton — **PostgreSQL** driver (`pgsql:host=db;port=5432`) |
 | `InstallProtocolManager.php` | Protocol lifecycle (install/uninstall/activate/detect) |
-| `JWT.php` | JWT token creation and verification for API auth |
+| `JWT.php` | JWT token creation and verification for API auth (env-only `JWT_SECRET`) |
 | `LdapSync.php` | LDAP/Active Directory: connection, auth, group mapping, user sync |
 | `Logger.php` | File-based logging utility |
 | `OpenRouterService.php` | OpenRouter AI API client for script generation |
 | `PanelImporter.php` | Import configurations from other panels |
 | `ProtocolService.php` | Protocol CRUD service layer |
 | `QrUtil.php` | Amnezia-compatible QR encoding (QDataStream + Base64) |
+| `RateLimiter.php` | IP-based brute-force protection for auth endpoints (`auth_attempts` table) |
 | `Router.php` | Custom HTTP router (GET/POST with parameterized paths) |
 | `ServerMonitoring.php` | Xray API integration for online client tracking |
 | `Translator.php` | Multi-language i18n (en/ru/es/de/fr/zh) |
@@ -187,7 +191,7 @@ Migrations in `migrations/` are applied by `update.sh` using `psql`.
 
 ## Migration system
 
-Migrations live in `migrations/` and are numbered sequentially (`000_*.sql` through `070_*.sql`).
+Migrations live in `migrations/` and are numbered sequentially (`000_*.sql` through `072_*.sql`).
 They use **PostgreSQL syntax**: `SERIAL`, `BIGSERIAL`, `ON CONFLICT`, `ADD COLUMN IF NOT EXISTS`, `DO $$` blocks.
 
 Applied via `update.sh`:

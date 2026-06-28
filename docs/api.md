@@ -69,6 +69,11 @@ try {
 
 ### Get JWT Token
 
+> **Rate limited:** `POST /api/auth/token` is protected by IP-based throttling.
+> After 5 failed attempts within 60s the IP is locked out with exponential backoff;
+> locked requests return `429 Too Many Requests` with a `Retry-After` header.
+> A successful login clears the counter. See `docs/security.md#rate-limiting`.
+
 ```bash
 curl -X POST http://localhost:8082/api/auth/token \
   -d "email=admin@amnez.ia&password=admin123"
@@ -212,6 +217,9 @@ Response:
 ## Servers
 
 ### List Servers
+
+> **Note:** Sensitive fields (`password`, `ssh_key`) are never returned — SSH
+> passwords are encrypted at rest (see `docs/security.md#ssh-password-encryption`).
 
 ```bash
 curl -X GET http://localhost:8082/api/servers \

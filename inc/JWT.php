@@ -9,45 +9,43 @@ use Firebase\JWT\Key;
 
 class JWT {
     private static ?string $secretKey = null;
-    
+
+    /** Known insecure placeholder shipped in .env.example — must be rotated. */
+    private const PLACEHOLDER_SECRET = 'change_this_to_random_secret_key_for_production';
+
     /**
-     * Get or generate JWT secret key
+     * Ensure a strong JWT_SECRET exists in .env (auto-provisioned on first run).
+     * Never persists to the database — secrets belong in the environment only.
+     */
+    public static function ensureSecret(): void {
+        $current = Config::get('JWT_SECRET');
+        if ($current === null || $current === '' || $current === self::PLACEHOLDER_SECRET || strlen($current) < 32) {
+            $generated = bin2hex(random_bytes(32)); // 64 hex chars
+            Config::ensureKey('JWT_SECRET', $generated);
+            error_log('JWT: сгенерирован новый JWT_SECRET и записан в .env (rotated from placeholder/empty).');
+        }
+    }
+
+    /**
+     * Get JWT secret key from environment only (no DB fallback).
+     *
+     * @throws RuntimeException if no usable secret is configured.
      */
     private static function getSecretKey(): string {
         if (self::$secretKey !== null) {
             return self::$secretKey;
         }
-        
-        // Optional: read from environment variable if present and sufficiently long
-        $envKey = getenv('JWT_SECRET');
-        if ($envKey && strlen($envKey) >= 32) {
+
+        $envKey = Config::get('JWT_SECRET');
+        if ($envKey && strlen($envKey) >= 32 && $envKey !== self::PLACEHOLDER_SECRET) {
             self::$secretKey = $envKey;
             return self::$secretKey;
         }
-        
-        // Unified schema: settings(namespace='security', key='jwt_secret', JSON value)
-        $pdo = DB::conn();
-        $stmt = $pdo->prepare('SELECT "value" FROM settings WHERE namespace = ? AND "key" = ? LIMIT 1');
-        $stmt->execute(['security', 'jwt_secret']);
-        $result = $stmt->fetch();
-        
-        if ($result && isset($result['value'])) {
-            $val = $result['value'];
-            $decoded = json_decode($val, true);
-            if (is_string($decoded) && strlen($decoded) >= 32) {
-                self::$secretKey = $decoded;
-                return self::$secretKey;
-            }
-        }
-        
-        // If no secret exists, generate and save using the unified schema
-        $newKey = bin2hex(random_bytes(32));
-        $stmt = $pdo->prepare('INSERT INTO settings (user_id, namespace, "key", "value") VALUES (NULL, ?, ?, ?)
-                               ON CONFLICT (namespace, "key") WHERE user_id IS NULL
-                               DO UPDATE SET "value" = EXCLUDED.value');
-        $stmt->execute(['security', 'jwt_secret', json_encode($newKey)]);
-        self::$secretKey = $newKey;
-        return self::$secretKey;
+
+        throw new RuntimeException(
+            'JWT_SECRET не задан или слишком короткий. Установите JWT_SECRET (>=32 байт) в .env. '
+            . 'См. docs/security.md#jwt-secret'
+        );
     }
     
     /**

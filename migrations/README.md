@@ -20,7 +20,7 @@ Each migration runs exactly once (skip if `filename` already recorded).
 
 ## Migration files
 
-Files are numbered `000_*` through `070_*`, written in **PostgreSQL syntax**:
+Files are numbered `000_*` through `072_*`, written in **PostgreSQL syntax**:
 
 - `SERIAL` / `BIGSERIAL` for auto-increment
 - `ON CONFLICT ... DO UPDATE` for upserts (instead of `ON DUPLICATE KEY UPDATE`)

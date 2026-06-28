@@ -139,7 +139,7 @@ Access: `http://localhost:8000`
 ### Checklist
 
 - [ ] Change default admin password (`admin@amnez.ia`)
-- [ ] Generate strong `DB_PASSWORD` and `JWT_SECRET`
+- [ ] Generate strong `DB_PASSWORD` (`JWT_SECRET` and `APP_KEY` are auto-generated on first run — keep `.env` backed up and never rotate `APP_KEY` without re-encrypting secrets)
 - [ ] Set up HTTPS (nginx reverse proxy + Let's Encrypt)
 - [ ] Disable PHP error display (`APP_ENV=production`)
 - [ ] Configure firewall (block direct DB port 5432)
@@ -162,7 +162,8 @@ DB_USERNAME=amnezia
 DB_PASSWORD=<strong_random_password>
 DB_ROOT_PASSWORD=<strong_random_password>
 
-JWT_SECRET=<random_64_char_secret>
+JWT_SECRET=<auto_generated_on_first_run>
+APP_KEY=<auto_generated_on_first_run>
 ADMIN_EMAIL=admin@yourdomain.com
 ADMIN_PASSWORD=<strong_random_password>
 
@@ -193,7 +194,11 @@ This script pulls latest code, runs `composer install`, applies pending migratio
 | `DB_DATABASE` | `amnezia_panel` | Web panel database |
 | `DB_USERNAME` | `amnezia` | Database user |
 | `DB_PASSWORD` | — | Database password |
-| `JWT_SECRET` | — | JWT signing secret (64 chars) |
+| `JWT_SECRET` | auto | JWT signing secret (auto-generated & persisted to `.env` on first run; ≥32 bytes) |
+| `APP_KEY` | auto | libsodium key for SSH-password encryption (auto-generated & persisted to `.env`) |
+| `AUTH_RATE_LIMIT` | `5` | Max failed `/api/auth/token` attempts before lockout |
+| `AUTH_RATE_WINDOW` | `60` | Rolling window (seconds) for counting failures |
+| `AUTH_LOCKOUT_BASE` | `60` | Base lockout seconds (exponential backoff, capped at 1h) |
 | `ADMIN_EMAIL` | `admin@amnez.ia` | Default admin email |
 | `ADMIN_PASSWORD` | `admin123` | Default admin password |
 | `BOT_TOKEN` | — | Telegram bot token from @BotFather |
