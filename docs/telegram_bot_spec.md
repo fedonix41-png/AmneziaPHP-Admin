@@ -149,6 +149,17 @@ CREATE TABLE payments (
         *   Пользователю в Telegram отправляется уведомление об успешной оплате.
 5.  **Ручная проверка (Запасной вариант):** При нажатии кнопки `[Проверить оплату]` бот запрашивает статус транзакции у платежного API и, если она оплачена, производит продление.
 
+> **Реализовано (А):** встроенные Telegram Invoices — `telegram_bot/handlers/client/payments.py` (роутер `client.payments`):
+> `sendInvoice` → `pre_checkout_query` (проверка сессии и статуса клиента) → `successful_payment`
+> (запись в `payments` со статусом `completed` + `POST /api/clients/{id}/extend`).
+> Тарифы и провайдер настраиваются в `.env` (`PAYMENT_PROVIDER_TOKEN`, `PAYMENT_CURRENCY`, `PAYMENT_TARIFFS`),
+> разбор — `config.py::Settings.tariffs`; репозиторий платежей — `services/payments.py::PaymentsRepo`.
+> Кнопка «💳 Продлить подписку» появляется в главном меню только при заданном `PAYMENT_PROVIDER_TOKEN`
+> (`keyboards/client.py::main_menu_kb`). При сбое продления платёж помечается `paid_unfulfilled`
+> и админам уходит алерт (`services/alerts.py::send_alert_to_admins`).
+>
+> **Не реализовано (Б):** внешние провайдеры и приём webhook'ов от платёжных систем (опционально, см. план разработки).
+
 ---
 
 ## 🔔 5. Проактивный алертинг и рассылка администраторам

@@ -27,7 +27,10 @@ async def show_main_menu(message: Message, chat_id: int, telegram_id: int) -> No
     else:
         text = WELCOME.format(name=settings.panel_app_name)
 
-    await message.answer(text, reply_markup=main_menu_kb(authorized, is_admin))
+    await message.answer(
+        text,
+        reply_markup=main_menu_kb(authorized, is_admin, settings.payments_enabled),
+    )
 
 
 @router.message(Command("start"))

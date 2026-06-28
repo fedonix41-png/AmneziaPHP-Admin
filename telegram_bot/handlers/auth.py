@@ -86,7 +86,7 @@ async def on_password(message: Message, state: FSMContext) -> None:
     if not clients:
         await message.answer(
             "✅ Вы авторизованы, но активных подписок не найдено.",
-            reply_markup=main_menu_kb(True, settings.is_admin(message.from_user.id)),
+            reply_markup=main_menu_kb(True, settings.is_admin(message.from_user.id), settings.payments_enabled),
         )
         await show_main_menu(message, message.chat.id, telegram_id)
         return
@@ -97,7 +97,7 @@ async def on_password(message: Message, state: FSMContext) -> None:
             await users_repo.set_client_id(telegram_id, cid)
         await message.answer(
             "✅ Авторизация успешна! Подписка привязана.",
-            reply_markup=main_menu_kb(True, settings.is_admin(telegram_id)),
+            reply_markup=main_menu_kb(True, settings.is_admin(telegram_id), settings.payments_enabled),
         )
         return
 
@@ -127,6 +127,6 @@ async def cb_pick_client(callback: CallbackQuery) -> None:
     await users_repo.set_client_id(telegram_id, client_id)
     await callback.message.answer(
         "✅ Подписка выбрана.",
-        reply_markup=main_menu_kb(True, settings.is_admin(telegram_id)),
+        reply_markup=main_menu_kb(True, settings.is_admin(telegram_id), settings.payments_enabled),
     )
     await callback.answer()

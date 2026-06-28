@@ -91,10 +91,12 @@ amneziavpnphp/                          # Project root
 │       │       ├── common.py          # Shared helpers (auth context, user resolution)
 │       │       ├── config.py          # QR, .conf, key reset
 │       │       ├── menu.py            # Main + admin menus
+│       │       ├── payments.py        # Telegram Invoices: sendInvoice / pre_checkout / successful_payment
 │       │       └── stats.py           # Traffic statistics
 │       ├── services/
 │       │   ├── alerts.py              # Admin alerting framework
 │       │   ├── panel_api.py           # REST API client (httpx)
+│       │   ├── payments.py            # PaymentsRepo (CRUD for payments table)
 │       │   └── users.py               # User repo (asyncpg)
 │       ├── db/
 │       │   ├── pool.py                # Connection pool + auto-migration
@@ -104,7 +106,7 @@ amneziavpnphp/                          # Project root
 │       │   └── auth.py                 # Auth FSM states
 │       ├── keyboards/                 # Inline keyboards
 │       │   ├── admin.py               # Admin keyboards (client actions, servers, backups)
-│       │   └── client.py              # Client keyboards (main menu, reset confirm)
+│       │   └── client.py              # Client keyboards (main menu, reset confirm, pay tariffs)
 │       ├── middlewares/               # Access logging
 │       │   └── access.py              # Access log middleware
 │       └── utils/                     # Formatting utilities

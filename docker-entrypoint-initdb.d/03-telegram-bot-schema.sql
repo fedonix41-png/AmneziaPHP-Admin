@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS payments (
     telegram_id     BIGINT REFERENCES users(telegram_id) ON DELETE SET NULL,
     amount          NUMERIC(10, 2),
     currency        VARCHAR(10),
-    status          VARCHAR(50) DEFAULT 'pending',   -- 'pending' | 'completed' | 'failed'
-    provider        VARCHAR(50),                     -- 'telegram_invoice' | 'yookassa' | 'stripe' | etc.
+    status          VARCHAR(50) DEFAULT 'pending',   -- 'completed' | 'paid_unfulfilled' (см. services/payments.py)
+    provider        VARCHAR(50),                     -- 'telegram' | 'yookassa' | 'stripe' | etc.
     provider_tx_id  VARCHAR(255) NULL,               -- External transaction / invoice ID
     days_to_extend  INT,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE INDEX IF NOT EXISTS idx_payments_telegram_id ON payments (telegram_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status      ON payments (status);
 CREATE INDEX IF NOT EXISTS idx_payments_provider_tx ON payments (provider_tx_id);
+-- Идемпотичность исполнения (successful_payment может доставляться повторно).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_provider_tx_uniq
+    ON payments (provider_tx_id) WHERE provider_tx_id IS NOT NULL;
 
 -- ─────────────────────────────────────────────────────────────────
 -- FSM sessions: aiogram finite-state machine persistent storage

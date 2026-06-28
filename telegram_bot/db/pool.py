@@ -54,6 +54,10 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE INDEX IF NOT EXISTS idx_payments_telegram_id ON payments (telegram_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status      ON payments (status);
 CREATE INDEX IF NOT EXISTS idx_payments_provider_tx ON payments (provider_tx_id);
+-- Идемпотичность исполнения: successful_payment может доставляться повторно
+-- (краш/рестарт бота). Один charge_id — одна строка.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_provider_tx_uniq
+    ON payments (provider_tx_id) WHERE provider_tx_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS fsm_states (
     chat_id   BIGINT NOT NULL,

@@ -1,9 +1,46 @@
 from __future__ import annotations
 
-from typing import List
+import json
+from dataclasses import dataclass
+from typing import Any, List
 
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+@dataclass
+class Tariff:
+    """Тариф продления подписки: срок в днях + цена в целых единицах валюты."""
+    days: int
+    price: int
+    label: str
+
+
+# Тарифы по умолчанию, если PAYMENT_TARIFFS не задан/некорректен.
+_DEFAULT_TARIFFS_JSON = (
+    '[{"days":30,"price":199,"label":"1 месяц"},'
+    '{"days":90,"price":499,"label":"3 месяца"},'
+    '{"days":180,"price":899,"label":"6 месяцев"},'
+    '{"days":365,"price":1599,"label":"1 год"}]'
+)
+
+
+def _parse_tariffs(data: Any) -> List[Tariff]:
+    tariffs: List[Tariff] = []
+    if not isinstance(data, list):
+        return tariffs
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        try:
+            days = int(item.get("days", 0))
+            price = int(item.get("price", 0))
+        except (TypeError, ValueError):
+            continue
+        label = str(item.get("label") or f"{days} дн.")
+        if days > 0 and price > 0:
+            tariffs.append(Tariff(days=days, price=price, label=label))
+    return tariffs
 
 
 class Settings(BaseSettings):
@@ -43,6 +80,29 @@ class Settings(BaseSettings):
     alert_overlimit_interval: int = Field(900, validation_alias="ALERT_OVERLIMIT_INTERVAL")
     alert_expiring_hour: int = Field(9, validation_alias="ALERT_EXPIRING_HOUR")
     alert_expiring_days: int = Field(1, validation_alias="ALERT_EXPIRING_DAYS")
+
+    # ── Payments (Telegram Invoices) ──
+    # Payments token от @BotFather (Payments). Пусто → оплата отключена.
+    payment_provider_token: str = Field("", validation_alias="PAYMENT_PROVIDER_TOKEN")
+    # ISO 4217 (RUB/USD/EUR/…) либо XTR для Telegram Stars.
+    payment_currency: str = Field("RUB", validation_alias="PAYMENT_CURRENCY")
+    # JSON-массив тарифов: [{"days":30,"price":199,"label":"1 месяц"}, …]
+    # Пусто → используются тарифы по умолчанию.
+    payment_tariffs: str = Field("", validation_alias="PAYMENT_TARIFFS")
+
+    @property
+    def tariffs(self) -> List[Tariff]:
+        raw = self.payment_tariffs.strip() or _DEFAULT_TARIFFS_JSON
+        try:
+            data = json.loads(raw)
+        except (ValueError, TypeError):
+            data = json.loads(_DEFAULT_TARIFFS_JSON)
+        parsed = _parse_tariffs(data)
+        return parsed or _parse_tariffs(json.loads(_DEFAULT_TARIFFS_JSON))
+
+    @property
+    def payments_enabled(self) -> bool:
+        return bool(self.payment_provider_token)
 
     @computed_field
     @property
