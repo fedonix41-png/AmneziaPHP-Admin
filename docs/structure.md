@@ -95,6 +95,7 @@ amneziavpnphp/                          # Project root
 │       │       └── stats.py           # Traffic statistics
 │       ├── services/
 │       │   ├── alerts.py              # Admin alerting framework
+│       │   ├── audit.py               # Destructive-action audit log (revoke/delete/reset)
 │       │   ├── panel_api.py           # REST API client (httpx)
 │       │   ├── payments.py            # PaymentsRepo (CRUD for payments table)
 │       │   └── users.py               # User repo (asyncpg)

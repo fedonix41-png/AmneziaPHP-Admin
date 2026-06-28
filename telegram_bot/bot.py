@@ -26,6 +26,21 @@ def configure_logging() -> None:
         level=logging.INFO,
         format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     )
+    # Отдельный лог-файл для аудита деструктивных действий (см. services/audit.py).
+    if settings.audit_log_file:
+        try:
+            handler = logging.FileHandler(settings.audit_log_file, encoding="utf-8")
+            handler.setFormatter(
+                logging.Formatter("%(asctime)s | %(levelname)-8s | AUDIT | %(message)s")
+            )
+            audit_log = logging.getLogger("audit")
+            audit_log.addHandler(handler)
+            audit_log.propagate = False
+            audit_log.setLevel(logging.INFO)
+        except OSError as exc:
+            logging.getLogger(__name__).warning(
+                "AUDIT_LOG_FILE=%s недоступен для записи: %s", settings.audit_log_file, exc
+            )
 
 
 def build_dispatcher() -> Dispatcher:

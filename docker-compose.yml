@@ -79,9 +79,12 @@ services:
       TG_DB_USER: ${DB_USERNAME:-amnezia}
       TG_DB_PASSWORD: ${DB_PASSWORD:-amnezia}
       PANEL_API_URL: ${PANEL_API_URL:-http://web:80}
+    volumes:
+      - logs:/app/logs
     ports:
       - "${BOT_WEBHOOK_PORT:-8080}:${BOT_WEBHOOK_PORT:-8080}"
 
 volumes:
   pg_data:
   dind_data:
+  logs:

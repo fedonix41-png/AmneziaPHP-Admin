@@ -88,15 +88,18 @@
 
 ## Приоритет 4: Мелкие правки
 
-### 4.1 Backup download Content-Type
-`public/index.php:2272` — `Content-Type: application/json` вместо `application/octet-stream`. Не блокирует Python-клиент, но некорректно для браузеров.
+### 4.1 Backup download Content-Type ✅
+`public/index.php:2304` — `Content-Type: application/octet-stream` + `Content-Disposition: attachment` уже корректны (исправлено ранее). `application/json` остаётся только в ветке ошибки (строка 2310). **Действий не требуется.**
 
-### 4.2 Деструктивное логирование
-Спек: строка 202 — логирование удалений/блокировок в файл/канал.
-**Файл:** `telegram_bot/middlewares/access.py` или новый `telegram_bot/services/audit.py`
+### 4.2 Деструктивное логирование ✅
+Спек: `docs/telegram_bot_spec.md:216` — логирование удалений/блокировок/сбросов в отдельный лог-файл и/или технический канал.
+- Создан `telegram_bot/services/audit.py` (`audit.log`) — единая точка аудита.
+- `telegram_bot/bot.py::configure_logging` — отдельный `FileHandler` для логгера `audit` при заданном `AUDIT_LOG_FILE` (propagate=False).
+- Точки вызова: `revoke_client`, `delete_client` (`handlers/admin/clients.py`), `delete_backup` (`handlers/admin/backups.py`), `regenerate_config` (`handlers/client/config.py`).
+- Настройки: `AUDIT_ENABLED`, `AUDIT_LOG_FILE`, `AUDIT_NOTIFY_ADMINS` (дублирование админам через `send_alert_to_admins`).
 
-### 4.3 End-to-end тестирование
-Создать сервер → создать клиента → проверить все admin-фичи через бота.
+### 4.3 End-to-end тестирование ⬜ (ручное)
+Создать сервер → создать клиента → проверить все admin-фичи через бота. Невозможно автоматизировать без живого Telegram-аккаунта и сервера; выполняется вручную перед релизом.
 
 ---
 

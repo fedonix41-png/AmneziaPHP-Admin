@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     # Пусто → используются тарифы по умолчанию.
     payment_tariffs: str = Field("", validation_alias="PAYMENT_TARIFFS")
 
+    # ── Audit logging (деструктивные действия) ──
+    # Мастер-переключатель записи аудита блокировок/удалений/сбросов.
+    audit_enabled: bool = Field(True, validation_alias="AUDIT_ENABLED")
+    # Отдельный файл для аудита (пусто → аудит идёт в общий поток stdout как все логи).
+    audit_log_file: str = Field("", validation_alias="AUDIT_LOG_FILE")
+    # Дублировать деструктивные действия рассылкой админам (см. services/alerts.py).
+    audit_notify_admins: bool = Field(True, validation_alias="AUDIT_NOTIFY_ADMINS")
+
     @property
     def tariffs(self) -> List[Tariff]:
         raw = self.payment_tariffs.strip() or _DEFAULT_TARIFFS_JSON

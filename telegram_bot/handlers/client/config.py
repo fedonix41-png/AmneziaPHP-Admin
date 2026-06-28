@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import base64
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.types import BufferedInputFile, CallbackQuery
 
 from handlers.client.common import answer_unresolved, resolve_client
 from keyboards.client import back_to_main_kb, reset_confirm_kb
+from services.audit import audit
 from services.panel_api import PanelAPIError, panel_api
 from services.users import users_repo
 
@@ -99,7 +100,7 @@ async def cb_reset(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("menu:reset_confirm:"))
-async def cb_reset_confirm(callback: CallbackQuery) -> None:
+async def cb_reset_confirm(callback: CallbackQuery, bot: Bot) -> None:
     telegram_id = callback.from_user.id
     try:
         client_id = int(callback.data.split(":")[-1])
@@ -123,6 +124,15 @@ async def cb_reset_confirm(callback: CallbackQuery) -> None:
     if not success:
         await _safe_answer(callback, "❌ Сервер не вернул новую конфигурацию. Попробуйте позже.")
         return
+
+    await audit.log(
+        bot,
+        action="regenerate_config",
+        target=f"client:{client_id}",
+        actor_id=telegram_id,
+        actor_name=callback.from_user.full_name,
+        details="(сброс ключа пользователем)",
+    )
 
     name = result.get("name") or f"client_{client_id}"
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(name))

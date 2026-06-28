@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from io import BytesIO
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
@@ -18,6 +18,7 @@ from keyboards.admin import (
     simple_back_kb,
     traffic_limit_presets_kb,
 )
+from services.audit import audit
 from services.panel_api import PanelAPIError, panel_api
 from services.users import config_cache
 from states.admin import AddClientStates
@@ -90,10 +91,17 @@ async def cb_admin_client_select(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(lambda cb: cb.data.startswith("admin:client:revoke:"))
-async def cb_admin_revoke(callback: CallbackQuery) -> None:
+async def cb_admin_revoke(callback: CallbackQuery, bot: Bot) -> None:
     client_id = int(callback.data.rsplit(":", 1)[1])
     try:
         await panel_api.revoke_client(client_id)
+        await audit.log(
+            bot,
+            action="revoke_client",
+            target=f"client:{client_id}",
+            actor_id=callback.from_user.id,
+            actor_name=callback.from_user.full_name,
+        )
         await callback.answer("✅ Клиент заблокирован", show_alert=True)
     except PanelAPIError as exc:
         await callback.answer(f"⚠ {exc.message}", show_alert=True)
@@ -124,11 +132,18 @@ async def cb_admin_extend(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(lambda cb: cb.data.startswith("admin:client:delete:"))
-async def cb_admin_delete(callback: CallbackQuery) -> None:
+async def cb_admin_delete(callback: CallbackQuery, bot: Bot) -> None:
     client_id = int(callback.data.rsplit(":", 1)[1])
     try:
         await panel_api.delete_client(client_id)
-        await _safe_edit(callback, 
+        await audit.log(
+            bot,
+            action="delete_client",
+            target=f"client:{client_id}",
+            actor_id=callback.from_user.id,
+            actor_name=callback.from_user.full_name,
+        )
+        await _safe_edit(callback,
             f"✅ Клиент #{client_id} удалён.", reply_markup=admin_clients_menu_kb()
         )
         await callback.answer()

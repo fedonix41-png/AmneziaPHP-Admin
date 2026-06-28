@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from io import BytesIO
 
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, CallbackQuery
 
@@ -12,6 +12,7 @@ from keyboards.admin import (
     backup_action_kb,
     backup_list_kb,
 )
+from services.audit import audit
 from services.panel_api import PanelAPIError, panel_api
 from utils.format import humanize_bytes, humanize_date
 
@@ -137,7 +138,7 @@ async def cb_admin_backup_download(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(lambda cb: cb.data.startswith("admin:backup:delete:"))
-async def cb_admin_backup_delete(callback: CallbackQuery) -> None:
+async def cb_admin_backup_delete(callback: CallbackQuery, bot: Bot) -> None:
     try:
         backup_id = int(callback.data.rsplit(":", 1)[1])
     except (IndexError, ValueError):
@@ -147,6 +148,13 @@ async def cb_admin_backup_delete(callback: CallbackQuery) -> None:
     await callback.answer("⏳ Удаление…")
     try:
         await panel_api.delete_backup(backup_id)
+        await audit.log(
+            bot,
+            action="delete_backup",
+            target=f"backup:{backup_id}",
+            actor_id=callback.from_user.id,
+            actor_name=callback.from_user.full_name,
+        )
         await callback.answer("✅ Бэкап удалён", show_alert=True)
     except PanelAPIError as exc:
         await callback.answer(f"⚠ {exc.message}", show_alert=True)
