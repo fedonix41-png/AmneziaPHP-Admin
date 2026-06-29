@@ -112,7 +112,7 @@ async def cb_admin_pick_server(callback: CallbackQuery) -> None:
     host = srv.get("host") or "-"
     status = srv.get("status") or "-"
     protocols = srv.get("protocols", [])
-    installed_protocols = ", ".join([p.get("name") or p.get("slug") for p in protocols]) if protocols else "Нет"
+    installed_protocols = ", ".join([p.get("name") or p.get("slug") or "" for p in protocols]) if protocols else "Нет"
 
     text = (
         f"🖥 <b>Сервер #{server_id}</b>\n\n"

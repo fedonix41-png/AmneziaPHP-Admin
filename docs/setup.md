@@ -172,9 +172,13 @@ BOT_TOKEN=<from_botfather>
 BOT_ADMIN_TELEGRAM_IDS=<comma_separated_ids>
 PANEL_API_URL=http://web:80
 PANEL_API_TOKEN=<api_token>
+# Webhook mode. BOT_WEBHOOK_SECRET is REQUIRED when BOT_USE_WEBHOOK=true
+# (every incoming request is validated against it).
 BOT_USE_WEBHOOK=true
 BOT_WEBHOOK_URL=https://your-domain.com/tg/webhook
 BOT_WEBHOOK_SECRET=<strong_random_secret>
+# Only needed when the webhook is exposed via a Cloudflare tunnel (cloudflared service)
+CLOUDFLARED_TUNNEL_TOKEN=<cloudflare_tunnel_token>
 ```
 
 ### Apply updates
@@ -208,3 +212,9 @@ This script pulls latest code, runs `composer install`, applies pending migratio
 | `BOT_ADMIN_TELEGRAM_IDS` | — | Comma-separated admin Telegram IDs |
 | `PANEL_API_URL` | `http://web:80` | Web panel URL for bot API calls |
 | `PANEL_API_TOKEN` | — | Permanent API token for bot |
+| `BOT_USE_WEBHOOK` | `false` | `true` = run bot in webhook mode, `false` = polling |
+| `BOT_WEBHOOK_URL` | — | Public URL ending with `/tg/webhook` (required when `BOT_USE_WEBHOOK=true`) |
+| `BOT_WEBHOOK_HOST` | `0.0.0.0` | Listen host for the bot's webhook HTTP server |
+| `BOT_WEBHOOK_PORT` | `8080` | Listen port for the bot's webhook HTTP server |
+| `BOT_WEBHOOK_SECRET` | — | Secret token; **required** when `BOT_USE_WEBHOOK=true` — validated on every request (`X-Telegram-Bot-Api-Secret-Token`) |
+| `CLOUDFLARED_TUNNEL_TOKEN` | — | Cloudflare tunnel token; only needed when exposing the webhook via the `cloudflared` service |

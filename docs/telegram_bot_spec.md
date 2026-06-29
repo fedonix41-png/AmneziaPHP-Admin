@@ -106,6 +106,9 @@ CREATE TABLE users (
 CREATE TABLE cached_configs (
     client_id VARCHAR(255) PRIMARY KEY,
     config_text TEXT,
+    qr_base64 TEXT,
+    vpn_url_config TEXT,   -- vpn:// URL config (e.g. awg2)
+    qr_code_vpn TEXT,      -- QR for the vpn:// URL
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

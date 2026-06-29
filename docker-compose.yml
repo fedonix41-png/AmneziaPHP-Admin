@@ -89,7 +89,7 @@ services:
     container_name: awghook-cloudflared
     network_mode: "host"
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token eyJhIjoiMDQ4ZmQzYTRiNzk1ZWFmMzcxMTFlMTc1NmYyYmE3MTAiLCJ0IjoiNWU5MDI1NTctMTEyZi00YzdhLTg3ZjItMDU5OTJjNDYzZTNmIiwicyI6IlkyUTJabVl5T1RRdFl6YzNPQzAwWVdObExXRmtPR1l0WXpGaVpXSXpORGRtT1dZeCJ9
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TUNNEL_TOKEN}
 
 volumes:
   pg_data:

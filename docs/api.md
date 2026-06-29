@@ -39,28 +39,32 @@ Router::post('/api/clients', function() {
 });
 ```
 
-### JWT Authentication (TODO)
+### Authorization
+
+All `/api/*` endpoints (except `POST /api/auth/token`) require a Bearer token in the
+`Authorization` header (or `X-Api-Token`), validated by `inc/JWT.php`:
 
 ```php
-use Firebase\JWT\JWT;
-
-// Generate token
-$payload = [
-    'user_id' => $user['id'],
-    'exp' => time() + 3600, // 1 hour
-];
-$token = JWT::encode($payload, $secretKey, 'HS256');
-
-// Verify token
-try {
-    $decoded = JWT::decode($token, $secretKey, ['HS256']);
-    $userId = $decoded->user_id;
-} catch (Exception $e) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Invalid token']);
-    exit;
-}
+$user = JWT::requireAuth();    // any authenticated user, else 401
+$user = JWT::requireManager(); // manager or admin, else 401/403
+// Admin-only endpoints are gated by JWT::requireAuth() + an inner role === 'admin' check
+// (system settings are web-only — see docs/architecture.md#authentication).
 ```
+
+Role tiers and which tier each endpoint category requires (role model:
+`docs/architecture.md` → *Authentication*):
+
+| Tier | Access | Typical endpoints |
+|------|--------|-------------------|
+| `requireAuth` | any logged-in user (own resources only) | read endpoints, `/api/auth/token`, client details |
+| `requireManager` | **manager** or **admin** — manages **all** servers/clients | `POST /api/servers/create`, `DELETE /api/servers/{id}/delete`, `/api/clients/create`, `/api/clients/{id}/revoke\|restore\|delete`, `/api/clients/{id}/set-expiration\|extend\|set-traffic-limit` |
+| admin-only | **admin** only | revealing server secrets (`include_secrets`), debug routes |
+
+> **Per-resource access:** write endpoints check `owner OR (admin/manager)`, i.e.
+> `!in_array($user['role'] ?? '', ['admin','manager'], true)`. **List** endpoints
+> (`GET /api/servers`, `GET /api/clients`, `/api/clients/expiring`) return **all**
+> records for admin/manager and only owned ones for regular users.
+> The Telegram bot authenticates with `PANEL_API_TOKEN` (a long-lived admin JWT).
 
 
 # API Usage Examples
@@ -85,7 +89,8 @@ Response:
   "success": true,
   "token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
   "type": "Bearer",
-  "expires_in": 2592000
+  "expires_in": 2592000,
+  "role": "admin"
 }
 ```
 

@@ -498,6 +498,17 @@ async def step_add_name(message: Message, state: FSMContext) -> None:
         await message.answer("⚠ Имя должно быть не короче 2 символов. Попробуйте снова:")
         return
     await state.update_data(client_name=name)
+
+    data = await state.get_data()
+    # Если сервер уже выбран (вход через экран управления сервером) — сразу к выбору срока
+    if data.get("server_id"):
+        await state.set_state(AddClientStates.waiting_duration)
+        await message.answer(
+            f"⏱ <b>Срок действия для «{name}»:</b>",
+            reply_markup=add_client_duration_kb(),
+        )
+        return
+
     await state.set_state(AddClientStates.waiting_server)
 
     try:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aiogram import Bot, F, Router
+from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -232,7 +232,7 @@ async def cb_admin_srv_add_client(callback: CallbackQuery, state: FSMContext) ->
         await callback.answer("⚠ Сначала выберите сервер", show_alert=True)
         return
 
-    await state.update_data(server_id=str(server_id))
+    await state.update_data(server_id=server_id)
     await state.set_state(AddClientStates.waiting_name)
     await _safe_edit(
         callback,

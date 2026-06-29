@@ -105,4 +105,8 @@ JWT signing secret is sourced **only** from the `JWT_SECRET` environment variabl
 
 ### Secrets provisioning
 `APP_KEY` and `JWT_SECRET` are auto-generated and persisted to `.env` on first run (`Config::ensureKey()`). They are **never** stored in the database or logged.
+Operational secrets — `DB_PASSWORD`, `PANEL_API_TOKEN`, `BOT_WEBHOOK_SECRET`, and the `CLOUDFLARED_TUNNEL_TOKEN` (referenced by the `cloudflared` service as `${CLOUDFLARED_TUNNEL_TOKEN}`) — must be set manually in `.env` (which is `.gitignore`d) and **never** committed to the repository or embedded in `docker-compose.yml`.
+
+### Telegram webhook request validation
+When `BOT_USE_WEBHOOK=true`, the bot refuses to start unless `BOT_WEBHOOK_SECRET` is set (`telegram_bot/bot.py`). The secret is registered with Telegram (`set_webhook(..., secret_token=...)`) and aiogram's `SimpleRequestHandler` validates the `X-Telegram-Bot-Api-Secret-Token` header on **every** incoming request, so only Telegram-originated updates are accepted and arbitrary POSTs to `/tg/webhook` are rejected.
 

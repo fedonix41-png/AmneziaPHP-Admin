@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from aiogram.types import Message
 
@@ -13,7 +13,7 @@ from services.users import users_repo
 @dataclass
 class AuthContext:
     jwt: Optional[str]
-    client_id: Optional[int]
+    client_id: Optional[Union[int, str]]
     details: Optional[dict]
     clients: List[dict]
     need_select: bool

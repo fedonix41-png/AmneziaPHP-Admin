@@ -115,6 +115,8 @@ def main() -> None:
         raise SystemExit("BOT_TOKEN не задан в .env")
     if settings.bot_use_webhook and not settings.bot_webhook_url:
         raise SystemExit("BOT_USE_WEBHOOK=true, но BOT_WEBHOOK_URL не задан")
+    if settings.bot_use_webhook and not settings.bot_webhook_secret:
+        raise SystemExit("BOT_USE_WEBHOOK=true, но BOT_WEBHOOK_SECRET не задан (нужен для проверки входящих запросов)")
 
     if settings.bot_use_webhook:
         run_webhook()

@@ -75,10 +75,13 @@ $user = Auth::user();
 
 // Check roles
 if (Auth::isAdmin()) {
-    // Admin logic (full access, system settings)
+    // Admin logic (full access incl. system settings)
 }
 if (Auth::isManager()) {
-    // Manager logic (manage servers, protocols, users; also true for admin)
+    // Manager logic — operational management of ALL servers and clients:
+    // create/delete/deploy servers, activate/uninstall protocols, create/revoke/
+    // restore/delete clients, set expiration & traffic limits, WARP, backups,
+    // import. (Also true for admin.)
 }
 
 // User role (default) has read-only access to their own allocated servers/clients.
@@ -87,10 +90,15 @@ if (Auth::isManager()) {
 Auth::logout();
 
 // Middleware
-requireAuth(); // In route handler (any logged in user)
-requireManager(); // Only manager or admin
-requireAdmin(); // Only admin
+requireAuth();   // Any logged-in user
+requireManager(); // manager or admin (server/client operations, used by the Telegram bot)
+requireAdmin();   // admin only (system settings, protocol definitions, user/role & LDAP administration, secrets)
 ```
+
+> **Ownership & listing:** resource access checks use `!Auth::isManager()` (web) and
+> `in_array($role, ['admin','manager'])` (API); list endpoints show **all**
+> servers/clients to admin and manager, only owned ones to regular users.
+> See `docs/api.md` for endpoint authorization.
 
 #### 4. Views (`inc/View.php`)
 
