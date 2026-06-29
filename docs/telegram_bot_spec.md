@@ -99,7 +99,7 @@ CREATE TABLE users (
     telegram_id BIGINT PRIMARY KEY,
     amnezia_client_id VARCHAR(255) NULL,
     email VARCHAR(255) NULL,
-    role VARCHAR(50) DEFAULT 'user', -- 'user' | 'admin'
+    role VARCHAR(50) DEFAULT 'user', -- 'user' | 'manager' | 'admin'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

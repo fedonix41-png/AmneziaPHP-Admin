@@ -54,6 +54,7 @@
     </div>
 
     <!-- Quick Actions -->
+    {% if user.role in ['admin', 'manager'] %}
     <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h2 class="text-xl font-bold text-gray-900 mb-4">
             <i class="fas fa-bolt text-yellow-500"></i>
@@ -66,6 +67,7 @@
             </a>
         </div>
     </div>
+    {% endif %}
 
     <!-- Recent Servers -->
     {% if servers|length > 0 %}
@@ -124,10 +126,12 @@
         <i class="fas fa-server text-gray-300 text-6xl mb-4"></i>
         <h3 class="text-xl font-medium text-gray-900 mb-2">{{ t('dashboard.no_servers') }}</h3>
         <p class="text-gray-500 mb-6">{{ t('dashboard.get_started') }}</p>
+        {% if user.role in ['admin', 'manager'] %}
         <a href="/servers/create" class="gradient-bg text-white px-6 py-3 rounded-md hover:opacity-90 inline-block">
             <i class="fas fa-plus mr-2"></i>
             {{ t('dashboard.add_first_server') }}
         </a>
+        {% endif %}
     </div>
     {% endif %}
 

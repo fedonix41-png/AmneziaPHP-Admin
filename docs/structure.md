@@ -169,7 +169,7 @@ Migrations in `migrations/` are applied by `update.sh` using `psql`.
 
 | File | Purpose |
 |------|---------|
-| `Auth.php` | Session-based auth, LDAP authentication, registration, role checks |
+| `Auth.php` | Session-based auth, LDAP authentication, registration, role checks (`admin`, `manager`, `user`) |
 | `BackupLibrary.php` | Server backup import/export |
 | `Config.php` | `.env` file parser, environment variable accessor, secret provisioning (`ensureKey`) |
 | `Crypto.php` | libsodium symmetric encryption-at-rest for SSH passwords, keyed by `APP_KEY` |

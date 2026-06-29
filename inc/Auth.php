@@ -81,6 +81,11 @@ class Auth {
     return $u && ($u['role'] === 'admin');
   }
 
+  public static function isManager(): bool {
+    $u = self::user();
+    return $u && in_array($u['role'], ['admin', 'manager'], true);
+  }
+
   public static function seedAdmin(string $email, string $password): void {
     $pdo = DB::conn();
     $email = strtolower(trim($email));
@@ -99,7 +104,7 @@ class Auth {
   }
 
   public static function setRole(int $userId, string $role): bool {
-    if (!in_array($role, ['admin','user'], true)) return false;
+    if (!in_array($role, ['admin','manager','user'], true)) return false;
     $pdo = DB::conn();
     $stmt = $pdo->prepare('UPDATE users SET role = ? WHERE id = ?');
     return $stmt->execute([$role, $userId]);

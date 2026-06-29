@@ -172,6 +172,9 @@ BOT_TOKEN=<from_botfather>
 BOT_ADMIN_TELEGRAM_IDS=<comma_separated_ids>
 PANEL_API_URL=http://web:80
 PANEL_API_TOKEN=<api_token>
+BOT_USE_WEBHOOK=true
+BOT_WEBHOOK_URL=https://your-domain.com/tg/webhook
+BOT_WEBHOOK_SECRET=<strong_random_secret>
 ```
 
 ### Apply updates

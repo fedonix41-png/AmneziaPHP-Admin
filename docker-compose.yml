@@ -84,6 +84,13 @@ services:
     ports:
       - "${BOT_WEBHOOK_PORT:-8080}:${BOT_WEBHOOK_PORT:-8080}"
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: awghook-cloudflared
+    network_mode: "host"
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token eyJhIjoiMDQ4ZmQzYTRiNzk1ZWFmMzcxMTFlMTc1NmYyYmE3MTAiLCJ0IjoiNWU5MDI1NTctMTEyZi00YzdhLTg3ZjItMDU5OTJjNDYzZTNmIiwicyI6IlkyUTJabVl5T1RRdFl6YzNPQzAwWVdObExXRmtPR1l0WXpGaVpXSXpORGRtT1dZeCJ9
+
 volumes:
   pg_data:
   dind_data:

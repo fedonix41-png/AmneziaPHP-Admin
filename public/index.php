@@ -127,6 +127,17 @@ function requireAuth(): void
 }
 
 // Helper function to require admin
+// Helper function to require manager
+function requireManager(): void
+{
+    requireAuth();
+    if (!Auth::isAdmin() && !Auth::isManager()) {
+        http_response_code(403);
+        echo 'Forbidden: Manager access required';
+        exit;
+    }
+}
+
 function requireAdmin(): void
 {
     requireAuth();
@@ -324,7 +335,7 @@ Router::get('/servers', function () {
 
 // Create server page
 Router::get('/servers/create', function () {
-    requireAuth();
+    requireManager();
     $protocols = InstallProtocolManager::listActive();
     $defaultProtocol = !empty($protocols) ? ($protocols[0]['slug'] ?? InstallProtocolManager::getDefaultSlug()) : InstallProtocolManager::getDefaultSlug();
     View::render('servers/create.twig', [
@@ -337,7 +348,7 @@ Router::get('/servers/create', function () {
 
 // Create server action
 Router::post('/servers/create', function () {
-    requireAuth();
+    requireManager();
     $user = Auth::user();
     $creationMode = $_POST['creation_mode'] ?? 'manual';
     $formData = $_POST;
@@ -531,7 +542,7 @@ Router::post('/servers/create', function () {
 
 // Delete server action
 Router::post('/servers/{id}/delete', function ($params) {
-    requireAuth();
+    requireManager();
     $user = Auth::user();
     $serverId = (int) $params['id'];
 
@@ -581,7 +592,7 @@ Router::get('/servers/{id}/deploy', function ($params) {
 
 // Deploy server action (AJAX)
 Router::post('/servers/{id}/deploy', function ($params) {
-    requireAuth();
+    requireManager();
     header('Content-Type: application/json');
 
     $serverId = (int) $params['id'];
@@ -625,7 +636,7 @@ Router::post('/servers/{id}/deploy', function ($params) {
 
 // Uninstall all protocols from server (mass cleanup) - MUST be before {slug}/uninstall
 Router::post('/servers/{id}/protocols/uninstall-all', function ($params) {
-    requireAuth();
+    requireManager();
     header('Content-Type: application/json');
     $serverId = (int) $params['id'];
     try {
@@ -664,7 +675,7 @@ Router::post('/servers/{id}/protocols/uninstall-all', function ($params) {
 
 // Uninstall a specific protocol on server (AJAX)
 Router::post('/servers/{id}/protocols/{slug}/uninstall', function ($params) {
-    requireAuth();
+    requireManager();
     header('Content-Type: application/json');
 
     $serverId = (int) $params['id'];
@@ -729,7 +740,7 @@ Router::post('/servers/{id}/protocols/{slug}/uninstall', function ($params) {
 
 // Activate protocol on server (AJAX)
 Router::post('/servers/{id}/protocols/activate', function ($params) {
-    requireAuth();
+    requireManager();
 
     // Suppress errors and clean output buffer to prevent HTML corruption of JSON
     @ini_set('display_errors', '0');
@@ -1003,7 +1014,7 @@ Router::get('/servers/{id}/monitoring', function ($params) {
 
 // Import server configuration from uploaded backup
 Router::post('/servers/{id}/config/import', function ($params) {
-    requireAuth();
+    requireManager();
     $user = Auth::user();
     $serverId = (int) $params['id'];
 
@@ -1109,7 +1120,7 @@ Router::post('/servers/{id}/config/import', function ($params) {
 
 // Delete server
 Router::post('/servers/{id}/delete', function ($params) {
-    requireAuth();
+    requireManager();
     $serverId = (int) $params['id'];
 
     try {
@@ -1133,7 +1144,7 @@ Router::post('/servers/{id}/delete', function ($params) {
 
 // Create client for server
 Router::post('/servers/{id}/clients/create', function ($params) {
-    requireAuth();
+    requireManager();
     $serverId = (int) $params['id'];
     $clientName = trim($_POST['name'] ?? '');
     $username = isset($_POST['username']) ? trim($_POST['username']) : '';
@@ -1634,7 +1645,7 @@ Router::post('/clients/{id}/restore', function ($params) {
 
 // Delete client
 Router::post('/clients/{id}/delete', function ($params) {
-    requireAuth();
+    requireManager();
     $clientId = (int) $params['id'];
 
     try {
@@ -1942,7 +1953,7 @@ Router::get('/api/servers', function () {
 Router::post('/api/servers/create', function () {
     header('Content-Type: application/json');
 
-    $user = JWT::requireAuth();
+    $user = JWT::requireManager();
     if (!$user)
         return;
 
@@ -2462,7 +2473,7 @@ Router::get('/api/clients/{id}/qr', function ($params) {
 Router::post('/api/clients/{id}/revoke', function ($params) {
     header('Content-Type: application/json');
 
-    $user = JWT::requireAuth();
+    $user = JWT::requireManager();
     if (!$user)
         return;
 
@@ -2495,7 +2506,7 @@ Router::post('/api/clients/{id}/revoke', function ($params) {
 Router::post('/api/clients/{id}/restore', function ($params) {
     header('Content-Type: application/json');
 
-    $user = JWT::requireAuth();
+    $user = JWT::requireManager();
     if (!$user)
         return;
 
@@ -2528,7 +2539,7 @@ Router::post('/api/clients/{id}/restore', function ($params) {
 Router::delete('/api/clients/{id}/delete', function ($params) {
     header('Content-Type: application/json');
 
-    $user = JWT::requireAuth();
+    $user = JWT::requireManager();
     if (!$user)
         return;
 
@@ -3543,7 +3554,7 @@ Router::post('/api/servers/{id}/protocols/{slug}/uninstall', function ($params) 
 Router::post('/api/clients/create', function () {
     header('Content-Type: application/json');
 
-    $user = JWT::requireAuth();
+    $user = JWT::requireManager();
     if (!$user)
         return;
 

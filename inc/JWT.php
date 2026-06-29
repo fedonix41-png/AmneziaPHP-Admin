@@ -205,6 +205,28 @@ class JWT {
     }
     
     /**
+     * Middleware: Require JWT authentication for API endpoints and verify manager access
+     * 
+     * @return array|null User data if authenticated and authorized, sends 401/403 response and returns null if not
+     */
+    public static function requireManager(): ?array {
+        $user = self::requireAuth();
+        
+        if ($user === null) {
+            return null;
+        }
+        
+        if (!in_array($user['role'], ['admin', 'manager'], true)) {
+            http_response_code(403);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Forbidden: Manager access required']);
+            return null;
+        }
+        
+        return $user;
+    }
+    
+    /**
      * Create API token for user (saves to database)
      * 
      * @param int $userId User ID

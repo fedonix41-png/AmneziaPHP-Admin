@@ -73,16 +73,23 @@ Auth::login($email, $password);
 // Get current user
 $user = Auth::user();
 
-// Check admin
+// Check roles
 if (Auth::isAdmin()) {
-    // Admin logic
+    // Admin logic (full access, system settings)
 }
+if (Auth::isManager()) {
+    // Manager logic (manage servers, protocols, users; also true for admin)
+}
+
+// User role (default) has read-only access to their own allocated servers/clients.
 
 // Logout
 Auth::logout();
 
 // Middleware
-requireAuth(); // In route handler
+requireAuth(); // In route handler (any logged in user)
+requireManager(); // Only manager or admin
+requireAdmin(); // Only admin
 ```
 
 #### 4. Views (`inc/View.php`)
