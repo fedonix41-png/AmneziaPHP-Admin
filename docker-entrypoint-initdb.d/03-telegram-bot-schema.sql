@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS cached_configs (
     client_id   VARCHAR(255) PRIMARY KEY,
     config_text TEXT,
     qr_base64   TEXT,
+    vpn_url_config TEXT,
+    qr_code_vpn TEXT,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

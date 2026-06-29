@@ -15,7 +15,10 @@ def main_menu_kb(authorized: bool, is_admin: bool, payments_enabled: bool = Fals
         rows.append([InlineKeyboardButton(text="🔑 Авторизация", callback_data="auth:login")])
     else:
         rows.append([
+            InlineKeyboardButton(text="📋 Мои подписки", callback_data="menu:my_configs"),
             InlineKeyboardButton(text="📊 Моя статистика", callback_data="menu:stats"),
+        ])
+        rows.append([
             InlineKeyboardButton(text="🚪 Выйти", callback_data="auth:logout"),
         ])
         rows.append([

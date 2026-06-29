@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from aiogram import Router
+from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
 
-from keyboards.admin import admin_servers_menu_kb, simple_back_kb
+from keyboards.admin import admin_servers_menu_kb, simple_back_kb, server_delete_confirm_kb
+from states.admin import AddServerStates, AddClientStates
 from services.panel_api import PanelAPIError, panel_api
 from utils.format import humanize_bytes, humanize_date
 
@@ -180,3 +182,164 @@ async def cb_admin_handshake(callback: CallbackQuery) -> None:
         lines.append(f"\n📦 <code>{evidence['docker_ps'].strip()[:500]}</code>")
 
     await _safe_edit(callback, "\n".join(lines), reply_markup=admin_servers_menu_kb())
+
+
+# ── Server Deletion ──────────────────────────────────────────────────
+
+@router.callback_query(lambda cb: cb.data == "admin:srv:delete")
+async def cb_admin_delete_server_prompt(callback: CallbackQuery) -> None:
+    from handlers.admin.menu import _get_server
+
+    server_id = _get_server(callback.from_user.id)
+    if not server_id:
+        await callback.answer("⚠ Сначала выберите сервер", show_alert=True)
+        return
+
+    await _safe_edit(
+        callback,
+        f"⚠ <b>Вы уверены, что хотите удалить сервер #{server_id}?</b>\nЭто действие необратимо.",
+        reply_markup=server_delete_confirm_kb()
+    )
+
+
+@router.callback_query(lambda cb: cb.data == "admin:srv:delete:confirm")
+async def cb_admin_delete_server_confirm(callback: CallbackQuery) -> None:
+    from handlers.admin.menu import _get_server
+    from keyboards.admin import admin_main_kb
+
+    server_id = _get_server(callback.from_user.id)
+    if not server_id:
+        await callback.answer("⚠ Ошибка: Сервер не выбран", show_alert=True)
+        return
+
+    try:
+        await panel_api.delete_server(server_id)
+        await callback.answer("✅ Сервер успешно удалён", show_alert=True)
+        await _safe_edit(callback, "✅ Сервер удалён.", reply_markup=admin_main_kb())
+    except PanelAPIError as exc:
+        await callback.answer(f"⚠ Ошибка: {exc.message}", show_alert=True)
+        await _safe_edit(callback, f"⚠ Ошибка при удалении: {exc.message}", reply_markup=admin_servers_menu_kb())
+
+
+# ── Client Creation from Server ──────────────────────────────────────
+
+@router.callback_query(lambda cb: cb.data == "admin:srv:add_client")
+async def cb_admin_srv_add_client(callback: CallbackQuery, state: FSMContext) -> None:
+    from handlers.admin.menu import _get_server
+
+    server_id = _get_server(callback.from_user.id)
+    if not server_id:
+        await callback.answer("⚠ Сначала выберите сервер", show_alert=True)
+        return
+
+    await state.update_data(server_id=str(server_id))
+    await state.set_state(AddClientStates.waiting_name)
+    await _safe_edit(
+        callback,
+        f"🚀 <b>Создание клиента на сервере #{server_id}</b>\n\nВведите имя клиента:",
+        reply_markup=simple_back_kb("admin:servers")
+    )
+
+
+# ── Add Server FSM ───────────────────────────────────────────────────
+
+@router.callback_query(lambda cb: cb.data == "admin:srv:add")
+async def cb_admin_add_server(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    await state.set_state(AddServerStates.waiting_name)
+    await callback.message.edit_text(
+        "➕ <b>Добавление сервера</b>\n\nВведите понятное имя для сервера (например, <code>NL-Amsterdam</code>):",
+        reply_markup=simple_back_kb("admin:servers")
+    )
+
+
+@router.message(AddServerStates.waiting_name)
+async def step_add_server_name(message: Message, state: FSMContext) -> None:
+    name = (message.text or "").strip()
+    if not name:
+        await message.answer("⚠ Имя не может быть пустым. Введите имя сервера:")
+        return
+
+    await state.update_data(server_name=name)
+    await state.set_state(AddServerStates.waiting_host)
+    await message.answer(
+        "Введите IP-адрес или домен сервера:",
+        reply_markup=simple_back_kb("admin:servers")
+    )
+
+
+@router.message(AddServerStates.waiting_host)
+async def step_add_server_host(message: Message, state: FSMContext) -> None:
+    host = (message.text or "").strip()
+    if not host:
+        await message.answer("⚠ Хост не может быть пустым. Введите IP или домен:")
+        return
+
+    await state.update_data(server_host=host)
+    await state.set_state(AddServerStates.waiting_port)
+    await message.answer(
+        "Введите SSH порт (обычно <code>22</code>):",
+        reply_markup=simple_back_kb("admin:servers")
+    )
+
+
+@router.message(AddServerStates.waiting_port)
+async def step_add_server_port(message: Message, state: FSMContext) -> None:
+    port_text = (message.text or "").strip()
+    try:
+        port = int(port_text)
+    except ValueError:
+        await message.answer("⚠ Порт должен быть числом. Повторите:")
+        return
+
+    await state.update_data(server_port=port)
+    await state.set_state(AddServerStates.waiting_username)
+    await message.answer(
+        "Введите имя пользователя (обычно <code>root</code>):",
+        reply_markup=simple_back_kb("admin:servers")
+    )
+
+
+@router.message(AddServerStates.waiting_username)
+async def step_add_server_username(message: Message, state: FSMContext) -> None:
+    username = (message.text or "").strip()
+    if not username:
+        await message.answer("⚠ Имя пользователя не может быть пустым. Повторите:")
+        return
+
+    await state.update_data(server_username=username)
+    await state.set_state(AddServerStates.waiting_password)
+    await message.answer(
+        "Введите пароль от пользователя SSH:",
+        reply_markup=simple_back_kb("admin:servers")
+    )
+
+
+@router.message(AddServerStates.waiting_password)
+async def step_add_server_password(message: Message, state: FSMContext) -> None:
+    password = (message.text or "").strip()
+    if not password:
+        await message.answer("⚠ Пароль не может быть пустым. Повторите:")
+        return
+
+    data = await state.get_data()
+    name = data["server_name"]
+    host = data["server_host"]
+    port = data["server_port"]
+    username = data["server_username"]
+
+    progress = await message.answer("⏳ <b>Добавление сервера...</b>\nЭто может занять некоторое время.")
+    
+    try:
+        await panel_api.create_server(
+            name=name,
+            host=host,
+            port=port,
+            username=username,
+            password=password
+        )
+        await progress.edit_text(f"✅ Сервер <b>{name}</b> ({host}) успешно добавлен!")
+    except PanelAPIError as exc:
+        await progress.edit_text(f"⚠ Ошибка при добавлении сервера: {exc.message}")
+
+    await state.clear()

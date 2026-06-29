@@ -55,7 +55,13 @@ async def cb_admin_client_select(callback: CallbackQuery) -> None:
     token = bot_settings.panel_api_token
     try:
         details = await panel_api.client_details(token, client_id)
-        await config_cache.save(client_id, details.get("config", ""), details.get("qr_code", ""))
+        await config_cache.save(
+            client_id,
+            details.get("config", ""),
+            details.get("qr_code", ""),
+            details.get("vpn_url_config", ""),
+            details.get("qr_code_vpn", "")
+        )
     except PanelAPIError as exc:
         await _safe_edit(callback, f"⚠ {exc.message}", reply_markup=back_to_admin_kb(), parse_mode=None)
         return
@@ -226,19 +232,32 @@ async def cb_admin_client_qr(callback: CallbackQuery) -> None:
         raw = _b64_to_bytes(cached["qr_code"])
         await callback.message.answer_photo(
             BufferedInputFile(raw, filename=f"qr_{client_id}.png"),
-            caption=f"📱 QR-код клиента #{client_id}",
+            caption=f"📱 QR Code (Simple) для клиента #{client_id}",
         )
+        if cached.get("qr_code_vpn"):
+            raw_vpn = _b64_to_bytes(cached["qr_code_vpn"])
+            await callback.message.answer_photo(
+                BufferedInputFile(raw_vpn, filename=f"qr_vpn_{client_id}.png"),
+                caption=f"📱 QR Code (vpn:// URL) для клиента #{client_id}",
+            )
         return
 
     progress = await callback.message.answer("⏳ Загружаю QR-код…")
     try:
         details = await panel_api.client_details(bot_settings.panel_api_token, client_id)
-        await config_cache.save(client_id, details.get("config", ""), details.get("qr_code", ""))
+        await config_cache.save(
+            client_id, 
+            details.get("config", ""), 
+            details.get("qr_code", ""),
+            details.get("vpn_url_config", ""),
+            details.get("qr_code_vpn", "")
+        )
     except PanelAPIError as exc:
         await progress.edit_text(f"⚠ {exc.message}")
         return
 
     qr_b64 = details.get("qr_code", "")
+    qr_vpn_b64 = details.get("qr_code_vpn", "")
     if not qr_b64:
         await progress.edit_text("⚠ QR-код недоступен")
         return
@@ -249,8 +268,15 @@ async def cb_admin_client_qr(callback: CallbackQuery) -> None:
         await progress.delete()
         await callback.message.answer_photo(
             BufferedInputFile(raw, filename=f"qr_{client_id}.png"),
-            caption=f"📱 QR-код для «{name}»",
+            caption=f"📱 QR Code (Simple) для «{name}»",
         )
+        
+        if qr_vpn_b64:
+            raw_vpn = _b64_to_bytes(qr_vpn_b64)
+            await callback.message.answer_photo(
+                BufferedInputFile(raw_vpn, filename=f"qr_vpn_{client_id}.png"),
+                caption=f"📱 QR Code (vpn:// URL) для «{name}»",
+            )
     except Exception:
         await progress.edit_text("⚠ Не удалось отправить QR-код")
 
@@ -273,17 +299,29 @@ async def cb_admin_client_config(callback: CallbackQuery) -> None:
             BufferedInputFile(cached["config"].encode("utf-8"), filename=f"{safe_name}.conf"),
             caption=f"📄 Файл конфигурации клиента #{client_id}",
         )
+        if cached.get("vpn_url_config"):
+            await callback.message.answer(
+                f"VPN URL Configuration:\n\n<code>{cached['vpn_url_config']}</code>",
+                parse_mode="HTML"
+            )
         return
 
     progress = await callback.message.answer("⏳ Загружаю конфиг…")
     try:
         details = await panel_api.client_details(bot_settings.panel_api_token, client_id)
-        await config_cache.save(client_id, details.get("config", ""), details.get("qr_code", ""))
+        await config_cache.save(
+            client_id, 
+            details.get("config", ""), 
+            details.get("qr_code", ""),
+            details.get("vpn_url_config", ""),
+            details.get("qr_code_vpn", "")
+        )
     except PanelAPIError as exc:
         await progress.edit_text(f"⚠ {exc.message}")
         return
 
     config_text = details.get("config", "")
+    vpn_url_config = details.get("vpn_url_config", "")
     if not config_text:
         await progress.edit_text("⚠ Файл конфигурации недоступен")
         return
@@ -295,13 +333,24 @@ async def cb_admin_client_config(callback: CallbackQuery) -> None:
         BufferedInputFile(config_text.encode("utf-8"), filename=f"{safe_name}.conf"),
         caption=f"📄 Файл конфигурации для «{name}»",
     )
+    if vpn_url_config:
+        await callback.message.answer(
+            f"VPN URL Configuration:\n\n<code>{vpn_url_config}</code>",
+            parse_mode="HTML"
+        )
 
 
 async def _refresh_client_view(callback: CallbackQuery, client_id: int) -> None:
     from config import settings as bot_settings
     try:
         details = await panel_api.client_details(bot_settings.panel_api_token, client_id)
-        await config_cache.save(client_id, details.get("config", ""), details.get("qr_code", ""))
+        await config_cache.save(
+            client_id,
+            details.get("config", ""),
+            details.get("qr_code", ""),
+            details.get("vpn_url_config", ""),
+            details.get("qr_code_vpn", "")
+        )
         name = details.get("name") or f"Клиент #{client_id}"
         ip = details.get("client_ip", "—")
         status = details.get("status", "")
@@ -520,10 +569,12 @@ async def step_add_duration(callback: CallbackQuery, state: FSMContext) -> None:
     cid = result.get("id", "?")
     config_text = result.get("config", "")
     qr_b64 = result.get("qr_code", "")
+    vpn_url_config = result.get("vpn_url_config", "")
+    qr_vpn_b64 = result.get("qr_code_vpn", "")
     expires = result.get("expires_at")
 
     if config_text or qr_b64:
-        await config_cache.save(cid, config_text, qr_b64)
+        await config_cache.save(cid, config_text, qr_b64, vpn_url_config, qr_vpn_b64)
 
     lines = [
         f"✅ <b>Клиент создан!</b>",
@@ -542,8 +593,14 @@ async def step_add_duration(callback: CallbackQuery, state: FSMContext) -> None:
             raw = _b64_to_bytes(qr_b64)
             await callback.message.answer_photo(
                 BufferedInputFile(raw, filename=f"qr_{cid}.png"),
-                caption=f"QR-код для «{name}»",
+                caption=f"QR Code (Simple) для «{name}»",
             )
+            if qr_vpn_b64:
+                raw_vpn = _b64_to_bytes(qr_vpn_b64)
+                await callback.message.answer_photo(
+                    BufferedInputFile(raw_vpn, filename=f"qr_vpn_{cid}.png"),
+                    caption=f"QR Code (vpn:// URL) для «{name}»",
+                )
         except Exception:
             pass
 
@@ -554,6 +611,11 @@ async def step_add_duration(callback: CallbackQuery, state: FSMContext) -> None:
             BufferedInputFile(buf.read(), filename=f"client_{cid}.conf"),
             caption=f"⚙ Конфиг для «{name}»",
         )
+        if vpn_url_config:
+            await callback.message.answer(
+                f"VPN URL Configuration:\n\n<code>{vpn_url_config}</code>",
+                parse_mode="HTML"
+            )
 
     await state.clear()
 

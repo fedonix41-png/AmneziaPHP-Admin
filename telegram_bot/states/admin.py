@@ -8,3 +8,12 @@ class AddClientStates(StatesGroup):
     waiting_server = State()
     waiting_duration = State()
     confirm = State()
+
+
+class AddServerStates(StatesGroup):
+    waiting_name = State()
+    waiting_host = State()
+    waiting_port = State()
+    waiting_username = State()
+    waiting_password = State()
+

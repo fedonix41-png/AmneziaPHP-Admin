@@ -56,13 +56,16 @@ class AdminGuardMiddleware(BaseMiddleware):
             text = event.text or ""
             needs_admin = text.startswith("/add_client")
 
-        if needs_admin and not settings.is_admin(user.id):
-            logger.warning("Попытка админ-доступа от user_id=%s", user.id)
-            if isinstance(event, CallbackQuery):
-                await event.answer("⛔ Доступ запрещён", show_alert=True)
-                return None
-            if isinstance(event, Message):
-                await event.answer("⛔ Эта команда доступна только администраторам")
-                return None
+        if needs_admin:
+            from services.users import users_repo
+            role = await users_repo.get_role(user.id)
+            if not (settings.is_admin(user.id) or role in ("admin", "manager")):
+                logger.warning("Попытка админ-доступа от user_id=%s", user.id)
+                if isinstance(event, CallbackQuery):
+                    await event.answer("⛔ Доступ запрещён", show_alert=True)
+                    return None
+                if isinstance(event, Message):
+                    await event.answer("⛔ Эта команда доступна только администраторам")
+                    return None
 
         return await handler(event, data)

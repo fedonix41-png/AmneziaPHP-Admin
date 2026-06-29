@@ -1853,7 +1853,8 @@ Router::post('/api/auth/token', function () {
             'success' => true,
             'token' => $token,
             'type' => 'Bearer',
-            'expires_in' => 30 * 24 * 3600 // 30 days
+            'expires_in' => 30 * 24 * 3600, // 30 days
+            'role' => $user['role'] ?? 'user'
         ]);
     } catch (Exception $e) {
         http_response_code(500);
@@ -2387,6 +2388,32 @@ Router::get('/api/clients/{id}/details', function ($params) {
             // ignore
         }
 
+        $protocolSlug = '';
+        $isAwg2 = false;
+        try {
+            $pdo = DB::conn();
+            if (!empty($clientData['protocol_id'])) {
+                $stmt = $pdo->prepare('SELECT slug FROM protocols WHERE id = ? LIMIT 1');
+                $stmt->execute([(int) $clientData['protocol_id']]);
+                $protocolSlug = $stmt->fetchColumn();
+            } else {
+                // $srv already created above if not failed
+                $srvObj = isset($srv) ? $srv : new VpnServer((int)$clientData['server_id']);
+                $protocolSlug = $srvObj->getData()['install_protocol'] ?? '';
+            }
+            $isAwg2 = ($protocolSlug === 'awg2');
+        } catch (Exception $e) { }
+
+        $qrCodeVpnUrl = '';
+        $vpnUrlConfig = '';
+        if ($isAwg2 && !empty($clientData['config'])) {
+            try {
+                require_once __DIR__ . '/../inc/QrUtil.php';
+                $qrCodeVpnUrl = VpnClient::generateQRCodeVpnUrl($clientData['config'], 'awg2');
+                $vpnUrlConfig = 'vpn://' . QrUtil::encodeVpnUrlConf($clientData['config'], 'awg2');
+            } catch (Exception $e) {}
+        }
+
         echo json_encode([
             'success' => true,
             'client' => [
@@ -2405,6 +2432,8 @@ Router::get('/api/clients/{id}/details', function ($params) {
                 'last_handshake' => $clientData['last_handshake'],
                 'config' => $clientData['config'],
                 'qr_code' => $clientData['qr_code'],
+                'qr_code_vpn' => $qrCodeVpnUrl,
+                'vpn_url_config' => $vpnUrlConfig,
             ]
         ]);
     } catch (Exception $e) {
@@ -3607,6 +3636,30 @@ Router::post('/api/clients/create', function () {
 
         $clientData = $client->getData();
 
+        $protocolSlug = '';
+        $isAwg2 = false;
+        try {
+            $pdo = DB::conn();
+            if (!empty($clientData['protocol_id'])) {
+                $stmt = $pdo->prepare('SELECT slug FROM protocols WHERE id = ? LIMIT 1');
+                $stmt->execute([(int) $clientData['protocol_id']]);
+                $protocolSlug = $stmt->fetchColumn();
+            } else {
+                $protocolSlug = $serverData['install_protocol'] ?? '';
+            }
+            $isAwg2 = ($protocolSlug === 'awg2');
+        } catch (Exception $e) { }
+
+        $qrCodeVpnUrl = '';
+        $vpnUrlConfig = '';
+        if ($isAwg2 && !empty($clientData['config'])) {
+            try {
+                require_once __DIR__ . '/../inc/QrUtil.php';
+                $qrCodeVpnUrl = VpnClient::generateQRCodeVpnUrl($clientData['config'], 'awg2');
+                $vpnUrlConfig = 'vpn://' . QrUtil::encodeVpnUrlConf($clientData['config'], 'awg2');
+            } catch (Exception $e) {}
+        }
+
         // Return client data with config and QR code
         echo json_encode([
             'success' => true,
@@ -3620,6 +3673,8 @@ Router::post('/api/clients/create', function () {
                 'created_at' => $clientData['created_at'],
                 'config' => $clientData['config'],
                 'qr_code' => $clientData['qr_code'],
+                'qr_code_vpn' => $qrCodeVpnUrl,
+                'vpn_url_config' => $vpnUrlConfig,
             ]
         ]);
     } catch (Exception $e) {

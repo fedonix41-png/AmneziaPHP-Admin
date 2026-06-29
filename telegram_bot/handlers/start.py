@@ -20,7 +20,8 @@ WELCOME = (
 async def show_main_menu(message: Message, chat_id: int, telegram_id: int) -> None:
     jwt = await users_repo.get_jwt(telegram_id)
     authorized = bool(jwt)
-    is_admin = settings.is_admin(telegram_id)
+    role = await users_repo.get_role(telegram_id)
+    is_admin = settings.is_admin(telegram_id) or role in ("admin", "manager")
 
     if authorized:
         text = "📋 <b>Главное меню</b>\nВыберите действие:"

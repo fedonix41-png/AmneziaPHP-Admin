@@ -81,7 +81,7 @@ async def cb_admin_servers_menu(callback: CallbackQuery) -> None:
     await _safe_edit(
         callback,
         "🖥 <b>Выберите сервер:</b>",
-        reply_markup=server_list_kb(servers, "admin:srv:pick"),
+        reply_markup=server_list_kb(servers, "admin:srv:pick", add_new_server=True),
     )
 
 
@@ -94,8 +94,37 @@ async def cb_admin_pick_server(callback: CallbackQuery) -> None:
         return
 
     _store_server(_uid(callback), server_id)
+    
+    # Fetch server info
+    servers: list = []
+    try:
+        servers = await panel_api.list_servers()
+    except PanelAPIError as exc:
+        await callback.answer(f"⚠ {exc.message}", show_alert=True)
+        return
+
+    srv = next((s for s in servers if s.get("id") == server_id), None)
+    if not srv:
+        await callback.answer("⚠ Сервер не найден", show_alert=True)
+        return
+
+    name = srv.get("name") or "Без названия"
+    host = srv.get("host") or "-"
+    status = srv.get("status") or "-"
+    protocols = srv.get("protocols", [])
+    installed_protocols = ", ".join([p.get("name") or p.get("slug") for p in protocols]) if protocols else "Нет"
+
+    text = (
+        f"🖥 <b>Сервер #{server_id}</b>\n\n"
+        f"<b>Имя:</b> {name}\n"
+        f"<b>Хост:</b> {host}\n"
+        f"<b>Статус:</b> {status}\n"
+        f"<b>Протоколы:</b> {installed_protocols}\n\n"
+        "Выберите действие:"
+    )
+
     await callback.message.edit_text(
-        f"🖥 <b>Сервер #{server_id}</b>\n\nВыберите действие:",
+        text,
         reply_markup=admin_servers_menu_kb(),
     )
     await callback.answer()

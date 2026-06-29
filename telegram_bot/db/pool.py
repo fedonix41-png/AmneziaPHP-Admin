@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS cached_configs (
     client_id   VARCHAR(255) PRIMARY KEY,
     config_text TEXT,
     qr_base64   TEXT,
+    vpn_url_config TEXT,
+    qr_code_vpn TEXT,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -73,6 +75,9 @@ CREATE TABLE IF NOT EXISTS fsm_states (
 async def _ensure_tables(conn: asyncpg.Connection) -> None:
     """Create required tables if they do not exist yet."""
     await conn.execute(_SCHEMA_SQL)
+    # Add new columns if they are missing
+    await conn.execute("ALTER TABLE cached_configs ADD COLUMN IF NOT EXISTS vpn_url_config TEXT")
+    await conn.execute("ALTER TABLE cached_configs ADD COLUMN IF NOT EXISTS qr_code_vpn TEXT")
     logger.debug("Ensured schema tables exist")
 
 

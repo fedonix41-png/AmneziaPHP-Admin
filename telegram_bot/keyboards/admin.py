@@ -17,9 +17,11 @@ def admin_main_kb() -> InlineKeyboardMarkup:
 
 def admin_servers_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Создать клиента", callback_data="admin:srv:add_client")],
         [InlineKeyboardButton(text="📊 Мониторинг", callback_data="admin:srv:monitor")],
         [InlineKeyboardButton(text="🔧 Диагностика", callback_data="admin:srv:diagnose")],
         [InlineKeyboardButton(text="💾 Бэкапы", callback_data="admin:srv:backups")],
+        [InlineKeyboardButton(text="🗑 Удалить сервер", callback_data="admin:srv:delete")],
         [InlineKeyboardButton(text="🔙 В админ-меню", callback_data="admin:menu")],
     ])
 
@@ -32,7 +34,7 @@ def admin_clients_menu_kb() -> InlineKeyboardMarkup:
     ])
 
 
-def server_list_kb(servers: List[Dict[str, Any]], prefix: str) -> InlineKeyboardMarkup:
+def server_list_kb(servers: List[Dict[str, Any]], prefix: str, add_new_server: bool = False) -> InlineKeyboardMarkup:
     rows: List[List[InlineKeyboardButton]] = []
     for srv in servers:
         sid = srv.get("id")
@@ -40,6 +42,8 @@ def server_list_kb(servers: List[Dict[str, Any]], prefix: str) -> InlineKeyboard
         host = srv.get("host", "")
         label = f"{name} ({host})" if host else name
         rows.append([InlineKeyboardButton(text=label, callback_data=f"{prefix}:{sid}")])
+    if add_new_server:
+        rows.append([InlineKeyboardButton(text="➕ Добавить сервер", callback_data="admin:srv:add")])
     rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -145,4 +149,11 @@ def back_to_admin_kb() -> InlineKeyboardMarkup:
 def simple_back_kb(callback_data: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔙 Назад", callback_data=callback_data)]
+    ])
+
+
+def server_delete_confirm_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚠️ Да, удалить", callback_data="admin:srv:delete:confirm")],
+        [InlineKeyboardButton(text="✖️ Отмена", callback_data="admin:servers")]
     ])

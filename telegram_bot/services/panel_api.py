@@ -158,6 +158,29 @@ class PanelAPI:
         data = self._handle(response, context)
         return data.get("servers", []) or []
 
+    async def create_server(self, name: str, host: str, port: int, username: str, password: str) -> Dict[str, Any]:
+        context = "Создание сервера"
+        payload = {
+            "name": name,
+            "host": host,
+            "port": port,
+            "username": username,
+            "password": password
+        }
+        try:
+            response = await self.client.post("/api/servers/create", headers=self._admin_headers(), json=payload)
+        except httpx.HTTPError as exc:
+            raise PanelAPIError(f"{context}: нет связи с панелью ({str(exc) or type(exc).__name__})") from exc
+        return self._handle(response, context)
+
+    async def delete_server(self, server_id: int) -> Dict[str, Any]:
+        context = "Удаление сервера"
+        try:
+            response = await self.client.delete(f"/api/servers/{server_id}/delete", headers=self._admin_headers())
+        except httpx.HTTPError as exc:
+            raise PanelAPIError(f"{context}: нет связи с панелью ({str(exc) or type(exc).__name__})") from exc
+        return self._handle(response, context)
+
     async def server_metrics(self, server_id: int, hours: int = 24) -> List[Dict[str, Any]]:
         context = "Метрики сервера"
         try:

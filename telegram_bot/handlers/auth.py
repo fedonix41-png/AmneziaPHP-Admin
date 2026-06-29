@@ -66,13 +66,15 @@ async def on_password(message: Message, state: FSMContext) -> None:
 
     token = result.get("token")
     expires_in = int(result.get("expires_in") or 30 * 24 * 3600)
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=expires_in)
+    role = result.get("role", "user")
 
     if not token:
         await message.answer("❌ Сервер не вернул токен.", reply_markup=back_to_main_kb())
         return
 
-    await users_repo.upsert_auth(telegram_id, email, token, expires_at)
+    await users_repo.upsert_auth(telegram_id, email, token, expires_at, role)
+    is_admin = settings.is_admin(telegram_id) or role in ("admin", "manager")
 
     try:
         clients = await panel_api.list_my_clients(token)
@@ -86,7 +88,7 @@ async def on_password(message: Message, state: FSMContext) -> None:
     if not clients:
         await message.answer(
             "✅ Вы авторизованы, но активных подписок не найдено.",
-            reply_markup=main_menu_kb(True, settings.is_admin(message.from_user.id), settings.payments_enabled),
+            reply_markup=main_menu_kb(True, is_admin, settings.payments_enabled),
         )
         await show_main_menu(message, message.chat.id, telegram_id)
         return
@@ -97,7 +99,7 @@ async def on_password(message: Message, state: FSMContext) -> None:
             await users_repo.set_client_id(telegram_id, cid)
         await message.answer(
             "✅ Авторизация успешна! Подписка привязана.",
-            reply_markup=main_menu_kb(True, settings.is_admin(telegram_id), settings.payments_enabled),
+            reply_markup=main_menu_kb(True, is_admin, settings.payments_enabled),
         )
         return
 
