@@ -1,0 +1,396 @@
+DO $func$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM protocols WHERE slug = 'openvpn-cloak') THEN
+
+        INSERT INTO protocols (
+            name, slug, description, is_active, 
+            install_script, uninstall_script, definition
+        ) VALUES (
+            'OpenVPN over Cloak', 
+            'openvpn-cloak', 
+            'OpenVPN wrapped in Cloak for obfuscation', 
+            true, 
+            $tag$#!/bin/bash
+set -euo pipefail
+CONTAINER_NAME="${SERVER_CONTAINER:-amnezia-openvpn-cloak}"
+CLOAK_PORT="${SERVER_PORT:-443}"
+OPENVPN_PORT=1194
+SS_PORT=8388
+BUILD_DIR="/opt/amnezia/openvpn-cloak"
+SERVER_ARCH="$(uname -m)"
+EXTERNAL_IP="$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "${SERVER_HOST:-}")"
+FAKE_SITE="${FAKE_SITE:-domain.ru}"
+
+mkdir -p "$BUILD_DIR"
+
+cat <<'EOF_DOCKER' > "$BUILD_DIR/Dockerfile"
+FROM alpine:3.15
+LABEL maintainer="AmneziaVPN"
+
+ARG SS_RELEASE="v1.13.1"
+ARG CLOAK_RELEASE="v2.5.5"
+ARG SERVER_ARCH
+
+RUN apk add --no-cache curl openvpn easy-rsa bash netcat-openbsd dumb-init rng-tools
+RUN apk --update upgrade --no-cache
+
+ENV EASYRSA_BATCH 1
+ENV PATH="/usr/share/easy-rsa:${PATH}"
+
+RUN mkdir -p /opt/amnezia
+RUN echo -e "#!/bin/bash\ntail -f /dev/null" > /opt/amnezia/start.sh
+RUN chmod a+x /opt/amnezia/start.sh
+
+RUN if [ "$SERVER_ARCH" = "x86_64" ]; then CK_ARCH="amd64"; \
+    elif [ "$SERVER_ARCH" = "i686" ]; then CK_ARCH="386"; \
+    elif [ "$SERVER_ARCH" = "aarch64" ]; then CK_ARCH="arm64"; \
+    elif [ "$SERVER_ARCH" = "arm" ]; then CK_ARCH="arm"; \
+    else exit -1; fi && \
+    curl -L https://github.com/cbeuw/Cloak/releases/download/${CLOAK_RELEASE}/ck-server-linux-${CK_ARCH}-${CLOAK_RELEASE} > /usr/bin/ck-server
+RUN chmod a+x /usr/bin/ck-server
+
+RUN curl -L https://github.com/shadowsocks/shadowsocks-rust/releases/download/${SS_RELEASE}/shadowsocks-${SS_RELEASE}.${SERVER_ARCH}-unknown-linux-musl.tar.xz  > /usr/bin/ss.tar.xz
+RUN tar -Jxvf /usr/bin/ss.tar.xz -C /usr/bin/
+RUN chmod a+x /usr/bin/ssserver
+
+RUN echo -e " \n\
+  fs.file-max = 51200 \n\
+  \n\
+  net.core.rmem_max = 67108864 \n\
+  net.core.wmem_max = 67108864 \n\
+  net.core.netdev_max_backlog = 250000 \n\
+  net.core.somaxconn = 4096 \n\
+  \n\
+  net.ipv4.tcp_syncookies = 1 \n\
+  net.ipv4.tcp_tw_reuse = 1 \n\
+  net.ipv4.tcp_tw_recycle = 0 \n\
+  net.ipv4.tcp_fin_timeout = 30 \n\
+  net.ipv4.tcp_keepalive_time = 1200 \n\
+  net.ipv4.ip_local_port_range = 10000 65000 \n\
+  net.ipv4.tcp_max_syn_backlog = 8192 \n\
+  net.ipv4.tcp_max_tw_buckets = 5000 \n\
+  net.ipv4.tcp_fastopen = 3 \n\
+  net.ipv4.tcp_mem = 25600 51200 102400 \n\
+  net.ipv4.tcp_rmem = 4096 87380 67108864 \n\
+  net.ipv4.tcp_wmem = 4096 65536 67108864 \n\
+  net.ipv4.tcp_mtu_probing = 1 \n\
+  net.ipv4.tcp_congestion_control = hybla \n\
+  " | sed -e 's/^\s\+//g' | tee -a /etc/sysctl.conf && \
+  mkdir -p /etc/security && \
+  echo -e " \n\
+  * soft nofile 51200 \n\
+  * hard nofile 51200 \n\
+  " | sed -e 's/^\s\+//g' | tee -a /etc/security/limits.conf  
+
+ENTRYPOINT [ "dumb-init", "/opt/amnezia/start.sh" ]
+CMD [ "" ]
+EOF_DOCKER
+
+cat <<'EOF_CONF' > "$BUILD_DIR/configure_container.sh"
+cat > /opt/amnezia/openvpn/server.conf <<EOF
+port $OPENVPN_PORT
+proto tcp
+dev tun
+ca /opt/amnezia/openvpn/ca.crt
+cert /opt/amnezia/openvpn/AmneziaReq.crt
+key /opt/amnezia/openvpn/AmneziaReq.key
+dh /opt/amnezia/openvpn/dh.pem
+server $OPENVPN_SUBNET_IP $OPENVPN_SUBNET_MASK
+ifconfig-pool-persist ipp.txt
+duplicate-cn
+keepalive 10 120
+$OPENVPN_NCP_DISABLE
+cipher $OPENVPN_CIPHER
+data-ciphers $OPENVPN_CIPHER
+auth $OPENVPN_HASH
+user nobody
+group nobody
+persist-key
+persist-tun
+crl-verify /opt/amnezia/openvpn/crl.pem
+status openvpn-status.log
+verb 1
+tls-server
+tls-version-min 1.2
+$OPENVPN_TLS_AUTH
+$OPENVPN_ADDITIONAL_SERVER_CONFIG
+EOF
+
+mkdir -p /opt/amnezia/cloak
+cd /opt/amnezia/cloak || exit 1
+CLOAK_ADMIN_UID=$(ck-server -u) && echo $CLOAK_ADMIN_UID > /opt/amnezia/cloak/cloak_admin_uid.key
+CLOAK_BYPASS_UID=$(ck-server -u) && echo $CLOAK_BYPASS_UID > /opt/amnezia/cloak/cloak_bypass_uid.key
+IFS=, read CLOAK_PUBLIC_KEY CLOAK_PRIVATE_KEY <<<$(ck-server -k)
+echo $CLOAK_PUBLIC_KEY > /opt/amnezia/cloak/cloak_public.key
+echo $CLOAK_PRIVATE_KEY > /opt/amnezia/cloak/cloak_private.key
+
+cat > /opt/amnezia/cloak/ck-config.json <<EOF
+{
+  "ProxyBook": {
+     "openvpn": [
+     "tcp",
+     "localhost:$OPENVPN_PORT"
+    ],
+     "shadowsocks": [
+     "tcp",
+     "localhost:$SHADOWSOCKS_SERVER_PORT"
+   ]
+  },
+  "BypassUID": [
+    "$CLOAK_BYPASS_UID"
+  ],
+  "BindAddr":[":443"],
+  "RedirAddr": "$FAKE_WEB_SITE_ADDRESS",
+  "PrivateKey": "$CLOAK_PRIVATE_KEY",
+  "AdminUID": "$CLOAK_ADMIN_UID",
+  "DatabasePath": "userinfo.db",
+  "StreamTimeout": 300
+}
+EOF
+
+mkdir -p /opt/amnezia/shadowsocks
+cd /opt/amnezia/shadowsocks || exit 1
+SHADOWSOCKS_PASSWORD=$(openssl rand -base64 32 | tr "=" "A" | tr "+" "A" | tr "/" "A")
+echo $SHADOWSOCKS_PASSWORD > /opt/amnezia/shadowsocks/shadowsocks.key
+cat > /opt/amnezia/shadowsocks/ss-config.json <<EOF
+{
+    "local_port": 8585,
+    "method": "$SHADOWSOCKS_CIPHER",
+    "password": "$SHADOWSOCKS_PASSWORD",
+    "server": "0.0.0.0",
+    "server_port": $SHADOWSOCKS_SERVER_PORT,
+    "timeout": 60
+}
+EOF
+EOF_CONF
+
+cat <<'EOF_START' > "$BUILD_DIR/start.sh"
+#!/bin/bash
+echo "Container startup"
+ifconfig eth0:0 $SERVER_IP_ADDRESS netmask 255.255.255.255 up
+if [ ! -c /dev/net/tun ]; then mkdir -p /dev/net; mknod /dev/net/tun c 10 200; fi
+
+iptables -A INPUT -i tun0 -j ACCEPT
+iptables -A FORWARD -i tun0 -j ACCEPT
+iptables -A OUTPUT -o tun0 -j ACCEPT
+
+iptables -A FORWARD -i tun0 -o eth0 -s $OPENVPN_SUBNET_IP/$OPENVPN_SUBNET_CIDR -j ACCEPT
+iptables -A FORWARD -i tun0 -o eth1 -s $OPENVPN_SUBNET_IP/$OPENVPN_SUBNET_CIDR -j ACCEPT
+iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+iptables -t nat -A POSTROUTING -s $OPENVPN_SUBNET_IP/$OPENVPN_SUBNET_CIDR -o eth0 -j MASQUERADE
+iptables -t nat -A POSTROUTING -s $OPENVPN_SUBNET_IP/$OPENVPN_SUBNET_CIDR -o eth1 -j MASQUERADE
+
+killall -KILL openvpn 2>/dev/null || true
+killall -KILL ck-server 2>/dev/null || true
+killall -KILL ssserver 2>/dev/null || true
+
+if [ -f /opt/amnezia/openvpn/ca.crt ]; then (openvpn --config /opt/amnezia/openvpn/server.conf --daemon); fi
+if [ -f /opt/amnezia/shadowsocks/ss-config.json ]; then (ssserver -c /opt/amnezia/shadowsocks/ss-config.json &); fi
+if [ -f /opt/amnezia/cloak/ck-config.json ]; then (ck-server -c /opt/amnezia/cloak/ck-config.json &); fi
+
+tail -f /dev/null
+EOF_START
+
+cat <<'EOF_OVPN' > "$BUILD_DIR/template.ovpn"
+client
+dev tun
+proto tcp
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+$OPENVPN_NCP_DISABLE
+cipher $OPENVPN_CIPHER
+auth $OPENVPN_HASH
+verb 3
+tls-client
+tls-version-min 1.2
+key-direction 1
+remote-cert-tls server
+redirect-gateway def1 bypass-dhcp
+
+dhcp-option DNS $PRIMARY_DNS
+dhcp-option DNS $SECONDARY_DNS
+block-outside-dns
+
+route $REMOTE_HOST 255.255.255.255 net_gateway
+remote 127.0.0.1 1194
+
+$OPENVPN_ADDITIONAL_CLIENT_CONFIG
+
+<ca>
+$OPENVPN_CA_CERT
+</ca>
+<cert>
+$OPENVPN_CLIENT_CERT
+</cert>
+<key>
+$OPENVPN_PRIV_KEY
+</key>
+<tls-auth>
+$OPENVPN_TA_KEY
+</tls-auth>
+EOF_OVPN
+
+docker build --pull -t "$CONTAINER_NAME" "$BUILD_DIR" --build-arg SERVER_ARCH="$SERVER_ARCH"
+
+docker network create amnezia-dns-net 2>/dev/null || true
+docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+
+DATA_DIR="/opt/amnezia/openvpn-cloak/data"
+mkdir -p "$DATA_DIR/openvpn" "$DATA_DIR/cloak" "$DATA_DIR/shadowsocks"
+
+docker run -d --privileged --cap-add=NET_ADMIN --restart always \
+  -v "$DATA_DIR:/opt/amnezia" \
+  -p "${CLOAK_PORT}:443/tcp" --name "$CONTAINER_NAME" "$CONTAINER_NAME"
+docker exec -i "$CONTAINER_NAME" bash -c 'mkdir -p /dev/net; [ -c /dev/net/tun ] || mknod /dev/net/tun c 10 200'
+
+cp "$BUILD_DIR/configure_container.sh" "$DATA_DIR/configure_container.sh"
+cp "$BUILD_DIR/start.sh"              "$DATA_DIR/start.sh"
+cp "$BUILD_DIR/template.ovpn"         "$DATA_DIR/openvpn/template.ovpn"
+
+docker exec -i "$CONTAINER_NAME" bash -c 'cd /opt/amnezia/openvpn && [ -f ca.crt ] || { export EASYRSA_KEY_SIZE=2048; easyrsa init-pki && easyrsa gen-dh && \
+  (echo yes | easyrsa build-ca nopass) && (echo yes | easyrsa gen-req AmneziaReq nopass) && \
+  (echo yes | easyrsa sign-req server AmneziaReq) && openvpn --genkey --secret ta.key && \
+  cp pki/dh.pem pki/ca.crt pki/issued/AmneziaReq.crt pki/private/AmneziaReq.key . && easyrsa gen-crl && cp pki/crl.pem crl.pem; }'
+
+docker exec -i -e OPENVPN_PORT=1194 -e OPENVPN_SUBNET_IP=10.8.2.0 -e OPENVPN_SUBNET_MASK=255.255.255.0 \
+  -e OPENVPN_SUBNET_CIDR=24 \
+  -e OPENVPN_CIPHER=AES-256-GCM -e OPENVPN_HASH=SHA512 -e OPENVPN_NCP_DISABLE="" -e OPENVPN_TLS_AUTH="" \
+  -e OPENVPN_ADDITIONAL_SERVER_CONFIG="" -e CLOAK_SERVER_PORT=443 -e SHADOWSOCKS_SERVER_PORT=8388 \
+  -e SHADOWSOCKS_CIPHER=chacha20-ietf-poly1305 -e FAKE_WEB_SITE_ADDRESS="$FAKE_SITE" \
+  -e SERVER_IP_ADDRESS="10.8.2.1" \
+  "$CONTAINER_NAME" bash /opt/amnezia/configure_container.sh
+
+docker restart "$CONTAINER_NAME"
+sleep 3
+
+PUB=$(docker exec "$CONTAINER_NAME" cat /opt/amnezia/cloak/cloak_public.key)
+BYPASS=$(docker exec "$CONTAINER_NAME" cat /opt/amnezia/cloak/cloak_bypass_uid.key)
+SS_PASSWORD=$(docker exec "$CONTAINER_NAME" cat /opt/amnezia/shadowsocks/shadowsocks.key)
+
+echo "Variable: container_name=$CONTAINER_NAME"
+echo "Variable: vpn_port=$CLOAK_PORT"
+echo "Variable: cloak_public_key=$PUB"
+echo "Variable: cloak_bypass_uid=$BYPASS"
+echo "Variable: ss_password=$SS_PASSWORD"
+echo "Variable: fake_site=$FAKE_SITE"
+echo "Variable: server_host=$EXTERNAL_IP"
+echo "Port: $CLOAK_PORT"
+$tag$,
+            $tag$#!/bin/bash
+CONTAINER_NAME="${SERVER_CONTAINER:-amnezia-openvpn-cloak}"
+docker stop "$CONTAINER_NAME" 2>/dev/null || true
+docker rm -fv "$CONTAINER_NAME" 2>/dev/null || true
+rm -rf /opt/amnezia/openvpn-cloak
+echo '{"success":true}'
+$tag$,
+            '{"engine":"shell","metadata":{"container_name":"amnezia-openvpn-cloak","config_dir":"/opt/amnezia/openvpn-cloak","port_range":[443,443],"openvpn_subnet":"10.8.2.0/24"},"scripts":{}}'::jsonb
+        );
+
+        -- Insert add_client, detect, restore directly into definition JSONB
+        UPDATE protocols
+        SET definition = jsonb_set(
+            jsonb_set(
+                jsonb_set(
+                    definition::jsonb, 
+                    '{scripts,add_client}', 
+                    to_jsonb($tag$#!/bin/bash
+LOGIN="{{options.login}}"
+CONTAINER_NAME="${SERVER_CONTAINER:-amnezia-openvpn-cloak}"
+CLOAK_PORT="${SERVER_PORT:-443}"
+FAKE_SITE="${FAKE_SITE:-domain.ru}"
+
+[[ "$LOGIN" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "Invalid login" >&2; exit 1; }
+
+docker exec -i "$CONTAINER_NAME" bash -c "cd /opt/amnezia/openvpn && easyrsa --keysize=2048 build-client-full '$LOGIN' nopass" >&2
+
+CA_CERT=$(docker exec "$CONTAINER_NAME" cat /opt/amnezia/openvpn/ca.crt)
+CLIENT_CERT=$(docker exec "$CONTAINER_NAME" cat "/opt/amnezia/openvpn/pki/issued/${LOGIN}.crt")
+PRIV_KEY=$(docker exec "$CONTAINER_NAME" cat "/opt/amnezia/openvpn/pki/private/${LOGIN}.key")
+TA_KEY=$(docker exec "$CONTAINER_NAME" cat /opt/amnezia/openvpn/ta.key)
+
+TEMPLATE=$(docker exec "$CONTAINER_NAME" cat /opt/amnezia/openvpn/template.ovpn)
+
+OVPN="${TEMPLATE//\$OPENVPN_NCP_DISABLE/}"
+OVPN="${OVPN//\$OPENVPN_CIPHER/AES-256-GCM}"
+OVPN="${OVPN//\$OPENVPN_HASH/SHA512}"
+OVPN="${OVPN//\$PRIMARY_DNS/1.1.1.1}"
+OVPN="${OVPN//\$SECONDARY_DNS/1.0.0.1}"
+OVPN="${OVPN//\$REMOTE_HOST/$SERVER_HOST}"
+OVPN="${OVPN//\$OPENVPN_ADDITIONAL_CLIENT_CONFIG/}"
+OVPN="${OVPN//\$OPENVPN_CA_CERT/$CA_CERT}"
+OVPN="${OVPN//\$OPENVPN_CLIENT_CERT/$CLIENT_CERT}"
+OVPN="${OVPN//\$OPENVPN_PRIV_KEY/$PRIV_KEY}"
+OVPN="${OVPN//\$OPENVPN_TA_KEY/$TA_KEY}"
+
+CERT_CLEAN=$(echo "$OVPN" | awk '/-----BEGIN CERTIFICATE-----/{flag=1} flag; /-----END CERTIFICATE-----/{flag=0; if(/-----END CERTIFICATE-----/) exit}')
+OVPN_CLEAN=$(echo "$OVPN" | sed -n '1,/-----BEGIN CERTIFICATE-----/p' | sed '$d')
+OVPN_CLEAN+=$'\n'"$CERT_CLEAN"$'\n'
+OVPN_CLEAN+=$(echo "$OVPN" | sed -n '/-----END CERTIFICATE-----/,$p' | sed '1d')
+
+OVPN_B64=$(printf '%s' "$OVPN_CLEAN" | base64 -w 0)
+
+PUB=$(docker exec "$CONTAINER_NAME" cat /opt/amnezia/cloak/cloak_public.key)
+BYPASS=$(docker exec "$CONTAINER_NAME" cat /opt/amnezia/cloak/cloak_bypass_uid.key)
+
+echo "Variable: ovpn_config_b64=$OVPN_B64"
+echo "Variable: cloak_public_key=$PUB"
+echo "Variable: cloak_bypass_uid=$BYPASS"
+echo "Variable: server_host=$SERVER_HOST"
+echo "Variable: vpn_port=$CLOAK_PORT"
+echo "Variable: fake_site=$FAKE_SITE"
+$tag$::text)
+                ),
+                '{scripts,detect}',
+                to_jsonb($tag$#!/bin/bash
+CONTAINER_NAME="${SERVER_CONTAINER:-amnezia-openvpn-cloak}"
+if docker ps -a --format '{{.Names}}' | grep -Eq "^${CONTAINER_NAME}\$"; then
+    if docker exec "$CONTAINER_NAME" test -f /opt/amnezia/openvpn/server.conf 2>/dev/null && \
+       docker exec "$CONTAINER_NAME" test -f /opt/amnezia/cloak/ck-config.json 2>/dev/null; then
+        echo '{"status":"existing","details":{"active":true}}'
+        exit 0
+    fi
+fi
+echo '{"status":"absent","details":{}}'
+$tag$::text)
+            ),
+            '{scripts,restore}',
+            to_jsonb($tag$#!/bin/bash
+CONTAINER_NAME="${SERVER_CONTAINER:-amnezia-openvpn-cloak}"
+PUB=$(docker exec "$CONTAINER_NAME" cat /opt/amnezia/cloak/cloak_public.key)
+BYPASS=$(docker exec "$CONTAINER_NAME" cat /opt/amnezia/cloak/cloak_bypass_uid.key)
+echo "Variable: cloak_public_key=$PUB"
+echo "Variable: cloak_bypass_uid=$BYPASS"
+echo "Variable: vpn_port=${SERVER_PORT:-443}"
+echo "Variable: container_name=$CONTAINER_NAME"
+echo '{"success":true,"mode":"restore"}'
+$tag$::text)
+        )
+        WHERE slug = 'openvpn-cloak';
+
+        -- Insert protocol variables
+        INSERT INTO protocol_variables (protocol_id, variable_name, description, variable_type, default_value, required)
+        SELECT id, 'server_host', 'Server Host (IP or Domain)', 'string', '', true
+        FROM protocols WHERE slug = 'openvpn-cloak';
+
+        INSERT INTO protocol_variables (protocol_id, variable_name, description, variable_type, default_value, required)
+        SELECT id, 'server_port', 'Cloak Port', 'number', '443', true
+        FROM protocols WHERE slug = 'openvpn-cloak';
+
+        INSERT INTO protocol_variables (protocol_id, variable_name, description, variable_type, default_value, required)
+        SELECT id, 'cloak_public_key', 'Cloak Public Key', 'string', '', true
+        FROM protocols WHERE slug = 'openvpn-cloak';
+
+        INSERT INTO protocol_variables (protocol_id, variable_name, description, variable_type, default_value, required)
+        SELECT id, 'cloak_bypass_uid', 'Cloak Bypass UID', 'string', '', true
+        FROM protocols WHERE slug = 'openvpn-cloak';
+
+        INSERT INTO protocol_variables (protocol_id, variable_name, description, variable_type, default_value, required)
+        SELECT id, 'fake_site', 'Cloak Fake Web Site', 'string', 'domain.ru', true
+        FROM protocols WHERE slug = 'openvpn-cloak';
+
+    END IF;
+END
+$func$;

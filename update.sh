@@ -57,6 +57,13 @@ for arg in "$@"; do
     esac
 done
 
+# Temporary permission fix to allow host user to write to logs/backups without sudo
+if command -v docker &> /dev/null; then
+    if [ -d "logs" ] || [ -d "backups" ]; then
+        docker run --rm -v "$(pwd):/app" php:8.2-apache chown -R $(id -u):$(id -g) /app/logs /app/backups >/dev/null 2>&1 || true
+    fi
+fi
+
 # Log file
 LOG_DIR="logs"
 mkdir -p "$LOG_DIR"
@@ -569,7 +576,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
             log_info "Applying: $FILENAME"
             
             # Apply migration
-            if cat "$migration" | $DOCKER_COMPOSE exec -T db sh -c "PGPASSWORD='$DB_PASS' psql -U '$DB_USER' -d '$DB_NAME'" 2>>"$LOG_FILE"; then
+            if cat "$migration" | $DOCKER_COMPOSE exec -T db sh -c "PGPASSWORD='$DB_PASS' psql -v ON_ERROR_STOP=1 -U '$DB_USER' -d '$DB_NAME'" 2>>"$LOG_FILE"; then
                 # Calculate checksum
                 CHECKSUM=$(sha256sum "$migration" | cut -d' ' -f1)
                 
@@ -580,7 +587,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
                 APPLIED_COUNT=$((APPLIED_COUNT + 1))
             else
                 # Check error log for duplicate/already exists errors (idempotent migrations)
-                LAST_ERROR=$(tail -30 "$LOG_FILE" | grep -i "already exists\|duplicate key\|already" || echo "")
+                LAST_ERROR=$(tail -30 "$LOG_FILE" | grep -E -i "ERROR:.*(already exists|duplicate key)" || echo "")
                 
                 if [ -n "$LAST_ERROR" ]; then
                     log_warning "Migration $FILENAME skipped (already exists)"

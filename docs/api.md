@@ -110,10 +110,14 @@ Example response:
   "protocols": [
     {"id": 11, "slug": "awg2", "name": "AmneziaWG 2.0"},
     {"id": 13, "slug": "aivpn", "name": "AIVPN"},
-    {"id": 12, "slug": "mtproxy", "name": "MTProxy (Telegram)"}
+    {"id": 12, "slug": "mtproxy", "name": "MTProxy (Telegram)"},
+    {"id": 14, "slug": "openvpn-cloak", "name": "OpenVPN over Cloak"}
   ]
 }
 ```
+
+### OpenVPN over Cloak Data Format
+For the `openvpn-cloak` protocol, the client `config` field returns the raw base OpenVPN config. The `qr_code` data URI contains the specialized Amnezia-compatible JSON payload that sets up dual containers (`amnezia-cloak` and `amnezia-openvpn`) with the necessary proxy variables (`cloak_public_key`, `cloak_bypass_uid`, etc.).
 
 ### Install Protocol on Server
 

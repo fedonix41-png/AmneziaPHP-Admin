@@ -631,4 +631,42 @@ class QrUtil
 
         return self::encodeOldPayloadFromJson(json_encode($envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
     }
+
+    public static function encodeOpenVpnCloakPayload(array $cfg): string
+    {
+        $ckConfig = [
+            'Transport' => 'direct',
+            'ProxyMethod' => 'openvpn',
+            'EncryptionMethod' => 'aes-gcm',
+            'UID' => (string)($cfg['bypass_uid'] ?? ''),
+            'PublicKey' => (string)($cfg['public_key'] ?? ''),
+            'ServerName' => (string)($cfg['fake_site'] ?? 'domain.ru'),
+            'NumConn' => 1,
+            'BrowserSig' => 'chrome',
+            'StreamTimeout' => 300,
+            'RemoteHost' => (string)($cfg['server_host'] ?? ''),
+            'RemotePort' => (string)($cfg['vpn_port'] ?? 443),
+        ];
+        $envelope = [
+            'containers' => [
+                ['cloak' => [
+                    'last_config' => json_encode($ckConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+                    'port' => (string)($cfg['vpn_port'] ?? 443),
+                    'transport_proto' => 'tcp',
+                ], 'container' => 'amnezia-cloak'],
+                ['openvpn' => [
+                    'last_config' => json_encode(['config' => (string)($cfg['ovpn'] ?? '')], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+                    'port' => '1194',
+                    'transport_proto' => 'tcp',
+                ], 'container' => 'amnezia-openvpn'],
+            ],
+            'defaultContainer' => 'amnezia-openvpn',
+            'description' => (string)($cfg['server_host'] ?? ''),
+            'dns1' => '1.1.1.1', 'dns2' => '1.0.0.1',
+            'hostName' => (string)($cfg['server_host'] ?? ''),
+        ];
+        return self::encodeOldPayloadFromJson(
+            json_encode($envelope, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+        );
+    }
 }

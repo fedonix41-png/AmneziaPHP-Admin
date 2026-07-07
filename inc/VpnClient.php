@@ -637,6 +637,21 @@ class VpnClient
 
             $qrCode = self::generateQRCode($config, $slug);
 
+            if ($slug === 'openvpn-cloak') {
+                require_once __DIR__ . '/QrUtil.php';
+                $ovpn = base64_decode((string)($vars['ovpn_config_b64'] ?? ''), true) ?: '';
+                $config = $ovpn;
+                $qrCode = QrUtil::pngBase64(QrUtil::encodeOpenVpnCloakPayload([
+                    'ovpn' => $ovpn,
+                    'public_key' => $vars['cloak_public_key'] ?? '',
+                    'bypass_uid' => $vars['cloak_bypass_uid'] ?? '',
+                    'server_host' => $vars['server_host'] ?? ($serverData['host'] ?? ''),
+                    'vpn_port' => $vars['vpn_port'] ?? 443,
+                    'fake_site' => $vars['fake_site'] ?? 'domain.ru',
+                ]));
+                $clientIP = $clientIP ?: '10.8.2.2';
+            }
+
             $priv = '';
             $pub = '';
             $psk = '';

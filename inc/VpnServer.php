@@ -759,14 +759,13 @@ BASH;
     {
         $containerName = $this->data['container_name'];
 
-        // Cleanup old container/image
+        // Cleanup old container
         $this->executeCommand("docker stop {$containerName} 2>/dev/null || true", true);
         $this->executeCommand("docker rm -fv {$containerName} 2>/dev/null || true", true);
-        $this->executeCommand("docker rmi {$containerName} 2>/dev/null || true", true);
 
         // Build new image
         $buildCmd = sprintf(
-            'docker build --no-cache --pull -t %s /opt/amnezia/amnezia-awg',
+            'docker build -t %s /opt/amnezia/amnezia-awg',
             $containerName
         );
         $this->executeCommand($buildCmd, true);

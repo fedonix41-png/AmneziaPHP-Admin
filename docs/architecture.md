@@ -140,7 +140,7 @@ $clientId = VpnClient::create($serverId, $userId, $name);
 // Get client instance
 $client = new VpnClient($clientId);
 $config = $client->getConfig();
-$qrCode = $client->getQRCode();
+$qrCode = $client->getQRCode(); // Note: For `openvpn-cloak`, the handler in `VpnClient::create()` intercepts QR generation to package Cloak variables via `QrUtil::encodeOpenVpnCloakPayload()`
 
 // List clients
 $clients = VpnClient::listByServer($serverId);
