@@ -233,7 +233,7 @@ $OPENVPN_TA_KEY
 </tls-auth>
 EOF_OVPN
 
-docker build --pull -t "$CONTAINER_NAME" "$BUILD_DIR" --build-arg SERVER_ARCH="$SERVER_ARCH"
+docker build -t "$CONTAINER_NAME" "$BUILD_DIR" --build-arg SERVER_ARCH="$SERVER_ARCH"
 
 docker network create amnezia-dns-net 2>/dev/null || true
 docker rm -f "$CONTAINER_NAME" 2>/dev/null || true

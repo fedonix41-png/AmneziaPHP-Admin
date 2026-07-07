@@ -1393,7 +1393,7 @@ if [ ! -d /opt/amnezia/awg2/src ]; then
 fi
 
 # Build Docker image using the repo Dockerfile (multi-stage: Go compile + tools)
-docker build --no-cache -t amnezia-awg2 /opt/amnezia/awg2/src
+docker build -t amnezia-awg2 /opt/amnezia/awg2/src
 
 # Run container (userspace: no SYS_MODULE, no /lib/modules)
 EXISTING=$(docker ps -aq -f "name=$CONTAINER_NAME" 2>/dev/null | head -1)
@@ -1758,7 +1758,7 @@ fi
 
 # Build Docker image
 cd /opt/amnezia/aivpn
-docker build --no-cache -t aivpn-server -f Dockerfile .
+docker build -t aivpn-server -f Dockerfile .
 
 # Remove existing container
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
