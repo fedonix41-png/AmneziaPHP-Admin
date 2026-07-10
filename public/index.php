@@ -594,6 +594,7 @@ Router::get('/servers/{id}/deploy', function ($params) {
 Router::post('/servers/{id}/deploy', function ($params) {
     requireManager();
     header('Content-Type: application/json');
+    set_time_limit(0);
 
     $serverId = (int) $params['id'];
     $rawBody = file_get_contents('php://input');
@@ -1439,7 +1440,7 @@ Router::get('/debug/awg-smoke', function () {
         $server->refresh();
         $serverData = $server->getData();
 
-        $containerName = $serverData['container_name'] ?? 'amnezia-awg';
+        $containerName = InstallProtocolManager::getDefaultAwgContainerName($serverData);
         $vpnPort = (int) ($serverData['vpn_port'] ?? 0);
 
         $cmdShow = sprintf('docker exec %s wg show wg0 2>/dev/null || true', escapeshellarg($containerName));
@@ -3042,7 +3043,7 @@ Router::post('/api/servers/{id}/protocols/selftest', function ($params) {
             return;
         }
 
-        $containerName = (string) ($serverData['container_name'] ?? 'amnezia-awg');
+        $containerName = InstallProtocolManager::getDefaultAwgContainerName($serverData);
 
         $derived = $deriveWgPublicKey($cfgPrivate);
         $computedClientPub = '';
@@ -3257,7 +3258,7 @@ Router::post('/api/servers/{id}/protocols/diagnose-handshake', function ($params
             return;
         }
 
-        $containerName = (string) ($serverData['container_name'] ?? 'amnezia-awg');
+        $containerName = InstallProtocolManager::getDefaultAwgContainerName($serverData);
         $vpnPort = (int) ($serverData['vpn_port'] ?? 0);
 
         // Optionally derive client public key from stored client config

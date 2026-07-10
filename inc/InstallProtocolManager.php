@@ -6,6 +6,15 @@ class InstallProtocolManager
     private const DEFAULT_SLUG = 'amnezia-wg';
     private const SESSION_KEY = 'pending_deploy_decisions';
 
+    public static function getDefaultAwgContainerName(array $serverData): string
+    {
+        $primary = trim((string) ($serverData['container_name'] ?? ''));
+        if ($primary === 'aivpn-server' || $primary === 'amnezia-awg') {
+            return $primary;
+        }
+        return 'amnezia-awg';
+    }
+
     private static function resolveAivpnContainerName(VpnServer $server, array $options = []): string
     {
         $serverData = $server->getData();
@@ -316,7 +325,7 @@ class InstallProtocolManager
                 Logger::appendInstall($serverId, 'Installing builtin AWG...');
                 $result = $server->runAwgInstall($options);
                 Logger::appendInstall($serverId, 'Builtin AWG install finished: ' . json_encode($result));
-                self::markServerActive($serverId, null, [
+                self::markServerActive($serverId, $protocol['slug'] ?? null, [
                     'vpn_port' => $result['vpn_port'] ?? null,
                     'server_public_key' => $result['public_key'] ?? ($result['server_public_key'] ?? null),
                     'preshared_key' => $result['preshared_key'] ?? null,
@@ -384,7 +393,7 @@ class InstallProtocolManager
                 }
                 $extras['result'] = $result;
             }
-            self::markServerActive($serverId, null, $extras);
+            self::markServerActive($serverId, $protocol['slug'] ?? null, $extras);
             return $result;
         } catch (Throwable $e) {
             Logger::appendInstall($serverId, 'Scripted install failed: ' . $e->getMessage());
@@ -419,7 +428,7 @@ class InstallProtocolManager
         $serverData = $server->getData();
         // For multi-protocol servers, use container_name from protocol metadata first
         // (vpn_servers.container_name stores the primary protocol's container, e.g. 'aivpn-server')
-        $containerName = $metadata['container_name'] ?? ($serverData['container_name'] ?? 'amnezia-awg');
+        $containerName = $metadata['container_name'] ?? self::getDefaultAwgContainerName($serverData);
         $containerFilter = escapeshellarg('^' . $containerName . '$');
         $containerArg = escapeshellarg($containerName);
 
@@ -588,17 +597,30 @@ class InstallProtocolManager
         
         // Store protocol-specific config in server_protocols (works for both primary and secondary)
         if ($protocolId) {
-            $configData = json_encode([
-                'server_host' => $serverData['ip_address'] ?? $serverData['hostname'] ?? null,
-                'server_port' => $details['vpn_port'] ?? null,
-                'extras' => [
+            // Keep specific keys but also merge all other details and raw results so no data is lost
+            $mergedExtras = array_merge(
+                is_array($rawResult) ? $rawResult : [],
+                $details,
+                [
                     'vpn_port' => $details['vpn_port'] ?? null,
                     'vpn_subnet' => $details['vpn_subnet'] ?? '10.8.1.0/24',
                     'server_public_key' => $details['server_public_key'] ?? null,
                     'preshared_key' => $details['preshared_key'] ?? null,
                     'awg_params' => $details['awg_params'] ?? null,
                     'container_name' => $containerName,
-                ],
+                ]
+            );
+            // Remove huge docker build strings that might have accidentally been caught
+            foreach ($mergedExtras as $k => $v) {
+                if (is_string($k) && (strpos($k, '#') === 0 || strpos($k, "\x1b") !== false)) {
+                    unset($mergedExtras[$k]);
+                }
+            }
+            
+            $configData = json_encode([
+                'server_host' => $serverData['ip_address'] ?? $serverData['hostname'] ?? null,
+                'server_port' => $details['vpn_port'] ?? null,
+                'extras' => $mergedExtras,
             ]);
             $stmt = $pdo->prepare('
                 INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at)
@@ -946,9 +968,19 @@ class InstallProtocolManager
                 continue;
             }
 
+            // Ignore Docker build kit lines like "#1 transferring dockerfile: 2.22kB done"
+            if (strpos($line, '#') === 0 || strpos($line, '[') === 0) {
+                continue;
+            }
+
             // Match "Key: Value" or "Key = Value" format
-            if (preg_match('/^([^:=]+?)[:=]\s*(.+)$/', $line, $matches)) {
+            // Only allow alphanumeric and space in key to avoid matching random log output
+            if (preg_match('/^([a-zA-Z0-9 ]+?)[:=]\s*(.+)$/', $line, $matches)) {
                 $key = trim($matches[1]);
+                // Ignore keys that are too long or have no letters (likely noise)
+                if (strlen($key) > 40 || !preg_match('/[a-zA-Z]/', $key)) {
+                    continue;
+                }
                 $value = trim($matches[2]);
 
                 // Normalize key names to snake_case
@@ -984,62 +1016,96 @@ class InstallProtocolManager
         return $result;
     }
 
-    private static function markServerActive(int $serverId, ?string $message = null, array $extras = []): void
+    private static function markServerActive(int $serverId, ?string $protocolSlug, array $extras = []): void
     {
         $pdo = DB::conn();
-        $setParts = ['status = ?', 'error_message = NULL', 'deployed_at = COALESCE(deployed_at, NOW())'];
-        $params = ['active'];
-        if (isset($extras['vpn_port']) && $extras['vpn_port'] !== null) {
-            $setParts[] = 'vpn_port = ?';
-            $params[] = (int) $extras['vpn_port'];
+        
+        $stmt2 = $pdo->prepare('SELECT install_protocol, host, vpn_port FROM vpn_servers WHERE id = ?');
+        $stmt2->execute([$serverId]);
+        $row = $stmt2->fetch();
+        $existingProtocol = $row['install_protocol'] ?? '';
+
+        $isSecondaryProtocol = false;
+        if ($protocolSlug !== null && $protocolSlug !== '') {
+            $isSecondaryProtocol = ($existingProtocol !== '' && $existingProtocol !== $protocolSlug);
+        } else {
+            $protocolSlug = $existingProtocol;
         }
-        if (isset($extras['server_public_key']) && $extras['server_public_key'] !== null) {
-            $setParts[] = 'server_public_key = ?';
-            $params[] = (string) $extras['server_public_key'];
-        }
-        if (isset($extras['preshared_key']) && $extras['preshared_key'] !== null) {
-            $setParts[] = 'preshared_key = ?';
-            $params[] = (string) $extras['preshared_key'];
-        }
-        if (isset($extras['container_name']) && $extras['container_name'] !== null && $extras['container_name'] !== '') {
-            $setParts[] = 'container_name = ?';
-            $params[] = (string) $extras['container_name'];
-        }
-        if (array_key_exists('awg_params', $extras)) {
-            $awgParams = $extras['awg_params'];
-            if (is_array($awgParams)) {
-                $awgParams = json_encode($awgParams);
+
+        if (!$isSecondaryProtocol) {
+            $setParts = ['status = ?', 'error_message = NULL', 'deployed_at = COALESCE(deployed_at, NOW())'];
+            $params = ['active'];
+            if (isset($extras['vpn_port']) && $extras['vpn_port'] !== null && (int)$extras['vpn_port'] > 0) {
+                $setParts[] = 'vpn_port = ?';
+                $params[] = (int) $extras['vpn_port'];
             }
-            if (is_string($awgParams)) {
-                $setParts[] = 'awg_params = ?';
-                $params[] = $awgParams;
+            if (isset($extras['server_public_key']) && $extras['server_public_key'] !== null) {
+                $setParts[] = 'server_public_key = ?';
+                $params[] = (string) $extras['server_public_key'];
             }
+            if (isset($extras['preshared_key']) && $extras['preshared_key'] !== null) {
+                $setParts[] = 'preshared_key = ?';
+                $params[] = (string) $extras['preshared_key'];
+            }
+            if (isset($extras['container_name']) && $extras['container_name'] !== null && $extras['container_name'] !== '') {
+                $setParts[] = 'container_name = ?';
+                $params[] = (string) $extras['container_name'];
+            }
+            if (array_key_exists('awg_params', $extras)) {
+                $awgParams = $extras['awg_params'];
+                if (is_array($awgParams)) {
+                    $awgParams = json_encode($awgParams);
+                }
+                if (is_string($awgParams)) {
+                    $setParts[] = 'awg_params = ?';
+                    $params[] = $awgParams;
+                }
+            }
+            $params[] = $serverId;
+            $sql = 'UPDATE vpn_servers SET ' . implode(', ', $setParts) . ' WHERE id = ?';
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+        } else {
+            // Secondary protocol — just set active, don't overwrite primary server fields
+            $stmt = $pdo->prepare('UPDATE vpn_servers SET status = ?, error_message = NULL WHERE id = ?');
+            $stmt->execute(['active', $serverId]);
         }
-        $params[] = $serverId;
-        $sql = 'UPDATE vpn_servers SET ' . implode(', ', $setParts) . ' WHERE id = ?';
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
 
         try {
-            $stmt2 = $pdo->prepare('SELECT install_protocol, host, vpn_port FROM vpn_servers WHERE id = ?');
-            $stmt2->execute([$serverId]);
-            $row = $stmt2->fetch();
-            $slug = $row['install_protocol'] ?? null;
-            if ($slug) {
+            if ($protocolSlug) {
                 $stmt3 = $pdo->prepare('SELECT id FROM protocols WHERE slug = ? LIMIT 1');
-                $stmt3->execute([$slug]);
+                $stmt3->execute([$protocolSlug]);
                 $protocolId = $stmt3->fetchColumn();
                 if ($protocolId) {
+                    $mergedExtras = array_merge(
+                        $extras,
+                        [
+                            'vpn_port' => $extras['vpn_port'] ?? null,
+                            'vpn_subnet' => $extras['vpn_subnet'] ?? '10.8.1.0/24',
+                            'server_public_key' => $extras['server_public_key'] ?? null,
+                            'preshared_key' => $extras['preshared_key'] ?? null,
+                            'awg_params' => $extras['awg_params'] ?? null,
+                            'container_name' => $extras['container_name'] ?? null,
+                        ]
+                    );
+
+                    // Remove huge docker build strings that might have accidentally been caught
+                    foreach ($mergedExtras as $k => $v) {
+                        if (is_string($k) && (strpos($k, '#') === 0 || strpos($k, "\x1b") !== false)) {
+                            unset($mergedExtras[$k]);
+                        }
+                    }
+
                     $config = [
                         'server_host' => $row['host'] ?? null,
-                        'server_port' => $row['vpn_port'] ?? null,
-                        'extras' => $extras
+                        'server_port' => $extras['vpn_port'] ?? ($row['vpn_port'] ?? null),
+                        'extras' => $mergedExtras
                     ];
                     $stmt4 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (server_id, protocol_id) DO UPDATE SET config_data = EXCLUDED.config_data, applied_at = CURRENT_TIMESTAMP');
                     $stmt4->execute([$serverId, (int) $protocolId, json_encode($config)]);
 
                     // Keep existing MTProxy client links in sync with current runtime port/secret after reinstall.
-                    if ($slug === 'mtproxy') {
+                    if ($protocolSlug === 'mtproxy') {
                         $mtHost = (string) ($config['server_host'] ?? '');
                         $mtPort = (string) ($config['server_port'] ?? '');
                         $mtSecret = '';
@@ -1428,7 +1494,7 @@ class InstallProtocolManager
         $serverData = $server->getData();
         // IMPORTANT: Use protocol metadata container_name first (e.g. 'amnezia-awg2'),
         // NOT vpn_servers.container_name which belongs to the PRIMARY protocol (e.g. 'aivpn-server')
-        $containerName = $metadata['container_name'] ?? $serverData['container_name'] ?? 'amnezia-awg';
+        $containerName = $metadata['container_name'] ?? self::getDefaultAwgContainerName($serverData);
         $configDir = trim((string) ($metadata['config_dir'] ?? ''));
         if ($configDir === '') {
             $configDir = (($protocol['slug'] ?? '') === 'awg2') ? '/opt/amnezia/awg2' : '/opt/amnezia/awg';
@@ -1578,7 +1644,7 @@ class InstallProtocolManager
                 $currentSlug = $protocol['slug'] ?? '';
                 $isFirstProtocol = ($existingProtocol === '' || $existingProtocol === $currentSlug);
                 if ($isFirstProtocol) {
-                    self::markServerActive($serverId, null, [
+                    self::markServerActive($serverId, $protocol['slug'] ?? null, [
                         'vpn_port' => $resolvedPort,
                         'server_public_key' => $res['server_public_key'] ?? null,
                         'preshared_key' => $res['preshared_key'] ?? null,
@@ -1587,7 +1653,7 @@ class InstallProtocolManager
                     ]);
                 } else {
                     // Secondary protocol — just mark active, don't overwrite primary data
-                    self::markServerActive($serverId, null, []);
+                    self::markServerActive($serverId, $protocol['slug'] ?? null, []);
                 }
 
                 $pdo = DB::conn();
@@ -1712,7 +1778,7 @@ class InstallProtocolManager
             if ($pid) {
                 $config = [
                     'server_host' => $server->getData()['host'] ?? null,
-                    'server_port' => $port,
+                    'server_port' => $serverPortForConfig,
                     'extras' => [
                         'password' => $password,
                         'client_id' => $clientId,
@@ -1721,6 +1787,12 @@ class InstallProtocolManager
                         'reality_private_key' => $res['reality_private_key'] ?? null,
                         'reality_short_id' => $res['reality_short_id'] ?? null,
                         'reality_server_name' => $res['reality_server_name'] ?? null,
+                        'vpn_port' => $port,
+                        'container_name' => $res['container_name'] ?? null,
+                        'server_host' => $res['server_host'] ?? null,
+                        'cloak_public_key' => $res['cloak_public_key'] ?? null,
+                        'cloak_bypass_uid' => $res['cloak_bypass_uid'] ?? null,
+                        'fake_site' => $res['fake_site'] ?? null,
                     ]
                 ];
                 $stmt2 = $pdo->prepare('INSERT INTO server_protocols (server_id, protocol_id, config_data, applied_at, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (server_id, protocol_id) DO UPDATE SET config_data = EXCLUDED.config_data, applied_at = CURRENT_TIMESTAMP');
@@ -1733,9 +1805,18 @@ class InstallProtocolManager
                 $currentSlug = $protocol['slug'] ?? '';
                 $isFirstProtocol = ($existingProtocol === '' || $existingProtocol === $currentSlug);
                 if ($isFirstProtocol) {
-                    self::markServerActive($serverId, null, ['vpn_port' => $port]);
+                    self::markServerActive($serverId, $protocol['slug'] ?? null, [
+                        'vpn_port' => $port,
+                        'container_name' => $res['container_name'] ?? null,
+                    ]);
                 }
             }
+            
+            // Always create/update server_protocols entry, even for secondary protocols
+            $existingProtocol = $server->getData()['install_protocol'] ?? '';
+            $currentSlug = $protocol['slug'] ?? '';
+            $isFirstProtocol = ($existingProtocol === '' || $existingProtocol === $currentSlug);
+            $serverPortForConfig = $isFirstProtocol ? ($port ?? null) : $port;
 
             // ── WARP: Auto-patch X-Ray outbound to route through WARP ──
             if (self::resolveHandler($protocol) === 'warp') {
@@ -2255,7 +2336,7 @@ class InstallProtocolManager
 
         $serverData = $server->getData();
         $metadata = $protocol['definition']['metadata'] ?? [];
-        $containerName = $metadata['container_name'] ?? $serverData['container_name'] ?? 'amnezia-awg';
+        $containerName = $metadata['container_name'] ?? self::getDefaultAwgContainerName($serverData);
         // AWG2: try awg0.conf first (standard), fall back to wg0.conf (legacy)
         $isAwg2 = (stripos($containerName, 'awg2') !== false || ($protocol['slug'] ?? '') === 'awg2');
         $configDir = '/opt/amnezia/awg';
